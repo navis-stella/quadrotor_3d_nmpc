@@ -1,0 +1,6 @@
+c_generated_code/
+__pycache__/
+*.pyc
+*.png
+*.egg-info/
+acados_ocp_*.json
