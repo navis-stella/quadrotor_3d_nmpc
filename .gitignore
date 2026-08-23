@@ -4,3 +4,4 @@ __pycache__/
 *.png
 *.egg-info/
 acados_ocp_*.json
+*.json
