@@ -1,12 +1,23 @@
 """
 simulation_main.py — Closed-Loop Simulation + Plotting
 ========================================================
+Stage 2.2:  DARE-based Terminal Cost (Relaxed QIH)
+
 3D Quadrotor NMPC simulation (quaternion model, 13 states).
+
+Design rationale:
+    Stage 2.1 implemented complete QIH-NMPC with terminal set constraint.
+    Simulation showed the terminal set is too small for practical drone
+    operation (alpha ≈ 0.0001, violated 47% of steps, ratio up to 20M×).
+
+    Stage 2.2 drops the terminal constraint and uses only P_DARE as
+    terminal cost. This retains the essential infinite-horizon cost
+    structure without infeasibility risk from a tight terminal set.
 
 Imports:
     quadrotor_3d_model.py   → create_plant_simulator(), normalize_quaternion(),
                                quat_to_euler(), f_hover, NX, NU
-    nmpc_solver_creator.py  → create_solver()
+    nmpc_solver_creator.py  → create_solver()  (Stage 2.2, DARE only)
 
 Extending in future stages:
     Stage 3 → calls EKF estimator at each step
@@ -103,8 +114,8 @@ def simulate(x0:        np.ndarray,
 def plot_states(X:     np.ndarray,
                 Ts:    float,
                 x_ref: np.ndarray,
-                title: str = 'Stage 1 — State Trajectory (Quaternion)',
-                save_path: str = 'results_states.png'):
+                title: str = 'Stage 2.2 — State Trajectory (DARE Terminal Cost)',
+                save_path: str = 'results_states_stage2.png'):
     """
     Plot state trajectories only.
 
@@ -179,8 +190,8 @@ def plot_states(X:     np.ndarray,
 
 def plot_inputs(U:     np.ndarray,
                 Ts:    float,
-                title: str = 'Stage 1 — Input Trajectory',
-                save_path: str = 'results_inputs.png'):
+                title: str = 'Stage 2.2 — Input Trajectory (DARE Terminal Cost)',
+                save_path: str = 'results_inputs_stage2.png'):
     """
     Plot input (motor thrust) trajectories only.
 
@@ -228,7 +239,7 @@ def plot_inputs(U:     np.ndarray,
 # ─────────────────────────────────────────────────────────────────
 def plot_3d_trajectory(X:     np.ndarray,
                        x_ref: np.ndarray,
-                       save_path: str = 'trajectory_3d.png'):
+                       save_path: str = 'trajectory_3d_stage2.png'):
     """Plot the 3D flight path of the quadrotor."""
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
@@ -240,7 +251,7 @@ def plot_3d_trajectory(X:     np.ndarray,
     ax.set_xlabel('x [m]')
     ax.set_ylabel('y [m]')
     ax.set_zlabel('z [m]')
-    ax.set_title('3D Quadrotor Flight Path')
+    ax.set_title('Stage 2.2 — 3D Quadrotor Flight Path (DARE)')
     ax.legend()
 
     plt.tight_layout()
@@ -254,10 +265,10 @@ def plot_3d_trajectory(X:     np.ndarray,
 # ─────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
 
-    # reference: hover at (1.0, 0.5, 1.5), level attitude, zero velocity
+    # reference: hover at (5.0, 0.5, 6.5), level attitude, zero velocity
     #   quaternion [1, 0, 0, 0] = identity rotation (level hover)
     x_ref = np.array([
-        1.0, 0.5, 1.5,        # px, py, pz
+        5.0, 0.5, 6.5,        # px, py, pz
         0.0, 0.0, 0.0,        # vx, vy, vz
         1.0, 0.0, 0.0, 0.0,   # qw, qx, qy, qz   (identity = level)
         0.0, 0.0, 0.0         # p, q, r
@@ -270,6 +281,11 @@ if __name__ == '__main__':
 
     X, U, Ts = simulate(x0, x_ref, N=20, T_horizon=1.0, T_sim=5.0)
 
-    plot_states(X, Ts, x_ref)
-    plot_inputs(U, Ts)
-    plot_3d_trajectory(X, x_ref)
+    plot_states(X, Ts, x_ref,
+               title='Stage 2.2 — State Trajectory (DARE Terminal Cost)',
+               save_path='results_states_stage2.png')
+    plot_inputs(U, Ts,
+               title='Stage 2.2 — Input Trajectory (DARE Terminal Cost)',
+               save_path='results_inputs_stage2.png')
+    plot_3d_trajectory(X, x_ref,
+                       save_path='trajectory_3d_stage2.png')
