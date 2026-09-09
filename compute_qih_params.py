@@ -1,6 +1,6 @@
 """
-compute_qih_parameters.py — Offline QIH-NMPC Parameter Computation
-===================================================================
+compute_qih_params.py — Offline QIH-NMPC Parameter Computation
+================================================================
 Stage 2.1:  Complete Quasi-Infinite Horizon NMPC
 
 Computes the terminal cost P, terminal region radius alpha, stability
@@ -31,7 +31,7 @@ Quaternion handling:
     qw is uncontrollable at hover — removed for CARE/Lyapunov, then
     P_red (12×12) is embedded back into P_full (13×13).
 
-Used by:  nmpc_solver_creator_qih.py  (Stage 2.1 solver)
+Used by:  ocp_config_qih.py  (Stage 2.1 solver)
 """
 
 import numpy as np

@@ -7,7 +7,7 @@
 # This wrapper just forwards your arguments to it.
 #
 # Usage (from Git Bash on Windows):
-#   ./run.sh simulation_main.py
+#   ./run.sh simulate_dare.py
 #   ./run.sh -m pytest -q
 #
 # For python -c one-liners with quotes, run inside a WSL shell instead:

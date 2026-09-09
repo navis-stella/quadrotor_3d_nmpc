@@ -1,6 +1,6 @@
 """
-nmpc_solver_creator.py — acados NMPC Solver for 3D Quadrotor (Quaternion)
-==========================================================================
+ocp_config_dare.py — acados NMPC Solver for 3D Quadrotor (Quaternion)
+======================================================================
 Creates and returns the acados OCP solver.
 
 Stage 1:    W_e = Q           (simple terminal cost)
@@ -160,7 +160,7 @@ def create_solver(x_ref:     np.ndarray,
         Terminal: || x_N - x_ref ||^2_{P_lqr}                (13-dim, DARE-based)
 
     No terminal set constraint — this is the relaxed Stage 2.2 design.
-    See nmpc_solver_creator_qih.py (Stage 2.1) for the full QIH version.
+    See ocp_config_qih.py (Stage 2.1) for the full QIH version.
 
     Constraints:
         0 <= fi <= f_max   for each motor  (box constraints on input)
@@ -218,6 +218,7 @@ def create_solver(x_ref:     np.ndarray,
     ocp.solver_options.tf              = T_horizon
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
     ocp.solver_options.integrator_type = 'ERK'
+    ocp.solver_options.sim_method_num_stages = 4
     ocp.solver_options.qp_solver       = 'PARTIAL_CONDENSING_HPIPM'
     ocp.solver_options.hessian_approx  = 'GAUSS_NEWTON'
     ocp.solver_options.print_level     = 0

@@ -1,6 +1,6 @@
 """
-nmpc_solver_creator_qih.py — acados QIH-NMPC Solver for 3D Quadrotor
-=====================================================================
+ocp_config_qih.py — acados QIH-NMPC Solver for 3D Quadrotor
+=============================================================
 Stage 2.1:  Complete Quasi-Infinite Horizon NMPC
 
 Implements QIH-NMPC with:
@@ -31,7 +31,7 @@ Constraints:
     Terminal:  (x_N-x_ref)^T P (x_N-x_ref) <= alpha   (soft)
 
 Extends:  Stage 1 (W_e = Q)
-See also: Stage 2.2 (nmpc_solver_creator.py) — relaxed, P_DARE only
+See also: Stage 2.2 (ocp_config_dare.py) — relaxed, P_DARE only
 """
 
 import numpy as np
@@ -40,7 +40,7 @@ from scipy.linalg import block_diag
 from acados_template import AcadosOcp, AcadosOcpSolver
 
 from quadrotor_3d_model import create_model, f_hover, NX, NU
-from compute_qih_parameters import compute_qih_offline_parameters
+from compute_qih_params import compute_qih_offline_parameters
 
 
 def create_solver(x_ref:     np.ndarray,

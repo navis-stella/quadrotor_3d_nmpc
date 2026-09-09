@@ -1,11 +1,11 @@
 """
-simulation_main_qih.py — Closed-Loop QIH-NMPC Simulation + Plotting
-=====================================================================
+simulate_qih.py — Closed-Loop QIH-NMPC Simulation + Plotting
+==============================================================
 Stage 2.1:  Complete Quasi-Infinite Horizon NMPC
 
 3D Quadrotor QIH-NMPC simulation (quaternion model, 13 states).
 
-Key addition over Stage 2.2 simulation:
+Key addition over Stage 1 simulation:
     - Extracts the predicted terminal state x_N at each step
     - Computes V_N = (x_N - x_ref)^T P (x_N - x_ref) and plots it
       against alpha to show when the terminal set constraint is
@@ -19,18 +19,19 @@ This visualization demonstrates the QIH trade-off:
 
 Imports:
     quadrotor_3d_model.py       → plant, utilities
-    nmpc_solver_creator_qih.py  → QIH-NMPC solver  (Stage 2.1)
-    compute_qih_parameters.py   → offline P, alpha for plotting
+    ocp_config_qih.py            → QIH-NMPC solver  (Stage 2.1)
+    compute_qih_params.py        → offline P, alpha for plotting
 """
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
 from quadrotor_3d_model         import (create_plant_simulator,
                                         normalize_quaternion,
                                         quat_to_euler, f_hover, NX, NU)
-from nmpc_solver_creator_qih    import create_solver
-from compute_qih_parameters     import compute_qih_offline_parameters
+from ocp_config_qih             import create_solver
+from compute_qih_params         import compute_qih_offline_parameters
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -111,7 +112,7 @@ def plot_states(X:     np.ndarray,
                 Ts:    float,
                 x_ref: np.ndarray,
                 title: str = 'Stage 2.1 QIH-NMPC — State Trajectory',
-                save_path: str = 'results_states_qih.png'):
+                save_path: str = 'results/stage2_1_qih/states.png'):
     """Plot state trajectories (position, velocity, attitude, angular rates)."""
     t_x = np.arange(X.shape[0]) * Ts
 
@@ -177,7 +178,7 @@ def plot_states(X:     np.ndarray,
 def plot_inputs(U:     np.ndarray,
                 Ts:    float,
                 title: str = 'Stage 2.1 QIH-NMPC — Input Trajectory',
-                save_path: str = 'results_inputs_qih.png'):
+                save_path: str = 'results/stage2_1_qih/inputs.png'):
     """Plot motor thrusts and total thrust."""
     t_u = np.arange(U.shape[0]) * Ts
 
@@ -222,7 +223,7 @@ def plot_terminal_constraint(X_N:    np.ndarray,
                              P:      np.ndarray,
                              alpha:  float,
                              Ts:     float,
-                             save_path: str = 'results_terminal_qih.png'):
+                             save_path: str = 'results/stage2_1_qih/terminal_constraint.png'):
     """
     Plot V_N(k) = (x_N(k) - x_ref)^T P (x_N(k) - x_ref) over time,
     compared to the terminal set radius alpha.
@@ -296,7 +297,7 @@ def plot_terminal_constraint(X_N:    np.ndarray,
 # ─────────────────────────────────────────────────────────────────
 def plot_3d_trajectory(X:     np.ndarray,
                        x_ref: np.ndarray,
-                       save_path: str = 'trajectory_3d_qih.png'):
+                       save_path: str = 'results/stage2_1_qih/trajectory_3d.png'):
     """Plot the 3D flight path of the quadrotor."""
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
@@ -353,16 +354,10 @@ if __name__ == '__main__':
     X, U, X_N, Ts = simulate(x0, x_ref, N=20, T_horizon=1.0, T_sim=5.0)
 
     # ── Plots ───────────────────────────────────────────────────
-    plot_states(X, Ts, x_ref,
-                title='Stage 2.1 QIH-NMPC — State Trajectory',
-                save_path='results_states_qih.png')
+    results_dir = os.path.join('results', 'stage2_1_qih')
+    os.makedirs(results_dir, exist_ok=True)
 
-    plot_inputs(U, Ts,
-                title='Stage 2.1 QIH-NMPC — Input Trajectory',
-                save_path='results_inputs_qih.png')
-
-    plot_terminal_constraint(X_N, x_ref, P_qih, alpha_qih, Ts,
-                             save_path='results_terminal_qih.png')
-
-    plot_3d_trajectory(X, x_ref,
-                       save_path='trajectory_3d_qih.png')
+    plot_states(X, Ts, x_ref)
+    plot_inputs(U, Ts)
+    plot_terminal_constraint(X_N, x_ref, P_qih, alpha_qih, Ts)
+    plot_3d_trajectory(X, x_ref)

@@ -1,6 +1,6 @@
 """
-simulation_main.py — Closed-Loop Simulation + Plotting
-========================================================
+simulate_dare.py — Closed-Loop Simulation + Plotting
+======================================================
 Stage 2.2:  DARE-based Terminal Cost (Relaxed QIH)
 
 3D Quadrotor NMPC simulation (quaternion model, 13 states).
@@ -15,9 +15,9 @@ Design rationale:
     structure without infeasibility risk from a tight terminal set.
 
 Imports:
-    quadrotor_3d_model.py   → create_plant_simulator(), normalize_quaternion(),
-                               quat_to_euler(), f_hover, NX, NU
-    nmpc_solver_creator.py  → create_solver()  (Stage 2.2, DARE only)
+    quadrotor_3d_model.py        → create_plant_simulator(), normalize_quaternion(),
+                                    quat_to_euler(), f_hover, NX, NU
+    ocp_config_dare.py           → create_solver()  (Stage 2.2, DARE only)
 
 Extending in future stages:
     Stage 3 → calls EKF estimator at each step
@@ -25,12 +25,15 @@ Extending in future stages:
     Stage 5 → time-varying reference trajectory
 """
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from quadrotor_3d_model   import (create_plant_simulator, normalize_quaternion,
-                                   quat_to_euler, f_hover, NX, NU)
-from nmpc_solver_creator  import create_solver
+from quadrotor_3d_model        import (create_plant_simulator, normalize_quaternion,
+                                       quat_to_euler, f_hover, NX, NU)
+from ocp_config_dare           import create_solver
+
+RESULTS_DIR = os.path.join('results', 'stage2_2_dare')
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -115,7 +118,7 @@ def plot_states(X:     np.ndarray,
                 Ts:    float,
                 x_ref: np.ndarray,
                 title: str = 'Stage 2.2 — State Trajectory (DARE Terminal Cost)',
-                save_path: str = 'results_states_stage2.png'):
+                save_path: str = 'results/stage2_2_dare/states.png'):
     """
     Plot state trajectories only.
 
@@ -191,7 +194,7 @@ def plot_states(X:     np.ndarray,
 def plot_inputs(U:     np.ndarray,
                 Ts:    float,
                 title: str = 'Stage 2.2 — Input Trajectory (DARE Terminal Cost)',
-                save_path: str = 'results_inputs_stage2.png'):
+                save_path: str = 'results/stage2_2_dare/inputs.png'):
     """
     Plot input (motor thrust) trajectories only.
 
@@ -239,7 +242,7 @@ def plot_inputs(U:     np.ndarray,
 # ─────────────────────────────────────────────────────────────────
 def plot_3d_trajectory(X:     np.ndarray,
                        x_ref: np.ndarray,
-                       save_path: str = 'trajectory_3d_stage2.png'):
+                       save_path: str = 'results/stage2_2_dare/trajectory_3d.png'):
     """Plot the 3D flight path of the quadrotor."""
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
@@ -281,11 +284,8 @@ if __name__ == '__main__':
 
     X, U, Ts = simulate(x0, x_ref, N=20, T_horizon=1.0, T_sim=5.0)
 
-    plot_states(X, Ts, x_ref,
-               title='Stage 2.2 — State Trajectory (DARE Terminal Cost)',
-               save_path='results_states_stage2.png')
-    plot_inputs(U, Ts,
-               title='Stage 2.2 — Input Trajectory (DARE Terminal Cost)',
-               save_path='results_inputs_stage2.png')
-    plot_3d_trajectory(X, x_ref,
-                       save_path='trajectory_3d_stage2.png')
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+
+    plot_states(X, Ts, x_ref)
+    plot_inputs(U, Ts)
+    plot_3d_trajectory(X, x_ref)

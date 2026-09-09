@@ -11,7 +11,7 @@
   - project path inside WSL: `/mnt/e/WorkSpace/GitHub/quadrotor_3d_nmpc`
 - **Run Python through the wrapper**, which hops into WSL and sets everything up:
   ```bash
-  ./run.sh simulation_main.py
+  ./run.sh simulate_dare.py
   ./run.sh -c "import acados_template; print('ok')"
   ```
   `run.sh` (Windows) → `wsl.exe -e bash /home/celestialnavis/acados_run.sh` (WSL-side launcher).
@@ -22,9 +22,12 @@
 
 | File | Role |
 |---|---|
-| `quadrotor_3d_model.py` | CasADi symbolic model (`create_model`), hover linearization for DARE (`get_hover_linearization`), `AcadosSimSolver` plant (`create_plant_simulator`), numeric ODE + RK4 backup, `normalize_quaternion`. Physical params + `NX=13`, `NU=4`. |
-| `nmpc_solver_creator.py` | Builds the acados OCP solver (`create_solver`): NONLINEAR_LS cost, box thrust constraints, SQP_RTI + ERK + PARTIAL_CONDENSING_HPIPM. |
-| `simulation_main.py` | Closed-loop sim + matplotlib plots. Updated for the 13-state quaternion model. Calls `normalize_quaternion()` after each plant step. |
+| `quadrotor_3d_model.py` | CasADi symbolic model (`create_model`), hover linearization (`get_hover_linearization`), `AcadosSimSolver` plant (`create_plant_simulator`), numeric ODE + RK4 backup, quaternion utilities (`normalize_quaternion`, `quat_to_euler`). Physical params + `NX=13`, `NU=4`. |
+| `ocp_config_dare.py` | **Stage 2.2** — DARE-based terminal cost `W_e = P_lqr`, no terminal constraint. Reduced-order DARE (qw removed). |
+| `simulate_dare.py` | **Stage 2.2** — Closed-loop sim + plots. Results saved to `results/stage2_2_dare/`. |
+| `compute_qih_params.py` | **Stage 2.1** — Offline QIH parameter computation: CARE, modified Lyapunov equation, terminal set alpha, Lipschitz verification. |
+| `ocp_config_qih.py` | **Stage 2.1** — QIH-NMPC solver with `W_e = P_lyap` + soft terminal set constraint. |
+| `simulate_qih.py` | **Stage 2.1** — QIH simulation + terminal constraint diagnostic plots. Results saved to `results/stage2_1_qih/`. |
 
 ## Model conventions
 
@@ -39,13 +42,14 @@
 
 ## Stage roadmap (from code comments)
 
-1. **Stage 1 (current):** terminal cost `W_e = Q`, no terminal constraint.
-2. **Stage 2:** `W_e = P` from DARE using `get_hover_linearization()`.
-3. **Stage 3:** augmented model + offset-free NMPC; EKF in the loop.
-4. **Stage 4:** obstacle-avoidance state constraints.
-5. **Stage 5:** time-varying reference trajectory.
+1. **Stage 1:** terminal cost `W_e = Q`, no terminal constraint. (uploaded to GitHub)
+2. **Stage 2.1:** QIH-NMPC — `W_e = P_lyap` + terminal set constraint (soft). (current)
+3. **Stage 2.2:** DARE-based terminal cost `W_e = P_lqr`, no terminal constraint. (current)
+4. **Stage 3:** augmented model + offset-free NMPC; EKF in the loop.
+5. **Stage 4:** obstacle-avoidance state constraints.
+6. **Stage 5:** time-varying reference trajectory.
 
 ## Conventions
 
 - Keep the existing house style: box-drawing section headers, aligned assignments, docstrings that explain the *why*.
-- Don't commit `c_generated_code/`, `*.png`, `*.json` (already gitignored).
+- Don't commit `c_generated_code/`, `results/`, `*.json` (already gitignored).
