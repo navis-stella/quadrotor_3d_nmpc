@@ -23,11 +23,14 @@
 | File | Role |
 |---|---|
 | `quadrotor_3d_model.py` | CasADi symbolic model (`create_model`), hover linearization (`get_hover_linearization`), `AcadosSimSolver` plant (`create_plant_simulator`), numeric ODE + RK4 backup, quaternion utilities (`normalize_quaternion`, `quat_to_euler`). Physical params + `NX=13`, `NU=4`. |
-| `ocp_config_dare.py` | **Stage 2.2** — DARE-based terminal cost `W_e = P_lqr`, no terminal constraint. Reduced-order DARE (qw removed). |
-| `simulate_dare.py` | **Stage 2.2** — Closed-loop sim + plots. Results saved to `results/stage2_2_dare/`. |
+| `plot_utils.py` | Shared plotting functions used by all simulation scripts: `plot_states`, `plot_inputs`, `plot_3d_trajectory`, `plot_terminal_constraint`. |
+| `ocp_config_basic.py` | **Stage 1** — Simple terminal cost `W_e = Q`, no terminal constraint. |
+| `simulate_basic.py` | **Stage 1** — Closed-loop sim + plots. Results saved to `results/stage1_basic/`. |
 | `compute_qih_params.py` | **Stage 2.1** — Offline QIH parameter computation: CARE, modified Lyapunov equation, terminal set alpha, Lipschitz verification. |
 | `ocp_config_qih.py` | **Stage 2.1** — QIH-NMPC solver with `W_e = P_lyap` + soft terminal set constraint. |
 | `simulate_qih.py` | **Stage 2.1** — QIH simulation + terminal constraint diagnostic plots. Results saved to `results/stage2_1_qih/`. |
+| `ocp_config_dare.py` | **Stage 2.2** — DARE-based terminal cost `W_e = P_lqr`, no terminal constraint. Reduced-order DARE (qw removed). |
+| `simulate_dare.py` | **Stage 2.2** — Closed-loop sim + plots. Results saved to `results/stage2_2_dare/`. |
 
 ## Model conventions
 
@@ -40,14 +43,17 @@
 - Quaternion cost weights ≈ 4× the equivalent Euler-angle weights (small-angle `phi ≈ 2 qx`); `qw` only lightly weighted.
 - After every plant step call `normalize_quaternion(x)` to stop norm drift (also enforces `qw > 0`).
 
-## Stage roadmap (from code comments)
+## Stage roadmap
 
-1. **Stage 1:** terminal cost `W_e = Q`, no terminal constraint. (uploaded to GitHub)
-2. **Stage 2.1:** QIH-NMPC — `W_e = P_lyap` + terminal set constraint (soft). (current)
-3. **Stage 2.2:** DARE-based terminal cost `W_e = P_lqr`, no terminal constraint. (current)
-4. **Stage 3:** augmented model + offset-free NMPC; EKF in the loop.
+1. **Stage 1:** terminal cost `W_e = Q`, no terminal constraint.
+2. **Stage 2.1:** QIH-NMPC — `W_e = P_lyap` + terminal set constraint (soft).
+3. **Stage 2.2:** DARE-based terminal cost `W_e = P_lqr`, no terminal constraint.
+4. **Stage 3:** augmented model + offset-free NMPC.
 5. **Stage 4:** obstacle-avoidance state constraints.
 6. **Stage 5:** time-varying reference trajectory.
+7. **Stage 6:** noisy measurements — EKF/MHE + nominal MPC.
+8. **Stage 7:** stochastic MPC.
+9. **Stage 8:** robust MPC.
 
 ## Conventions
 

@@ -30,9 +30,6 @@ Quaternion cost design:
     So quaternion weights ≈ 4× Euler angle weights for equivalent behavior.
     qw is only lightly penalized — it stays near 1 naturally via unit norm.
 
-Extending in future stages:
-    Stage 3 → augmented model + offset-free formulation
-    Stage 4 → obstacle avoidance state constraints
 """
 
 import numpy as np

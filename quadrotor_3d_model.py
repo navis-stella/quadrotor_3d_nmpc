@@ -45,9 +45,6 @@ Quaternion convention:
     Rotation matrix R(q) transforms body → world:
         v_world = R(q) @ v_body
 
-Extending this file in future stages:
-    Stage 2  → get_hover_linearization() already implemented, used for DARE terminal cost
-    Stage 3  → add create_augmented_model() for offset-free NMPC
 """
 
 import numpy as np
