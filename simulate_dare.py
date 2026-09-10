@@ -1,14 +1,24 @@
 """
-simulate_basic.py — Closed-Loop Simulation + Plotting
-========================================================
-Stage 1:  Simple Terminal Cost (W_e = Q)
+simulate_dare.py — Closed-Loop Simulation + Plotting
+======================================================
+Stage 2.2:  DARE-based Terminal Cost (Relaxed QIH)
 
 3D Quadrotor NMPC simulation (quaternion model, 13 states).
 
+Design rationale:
+    Stage 2.1 implemented complete QIH-NMPC with terminal set constraint.
+    Simulation showed the terminal set is too small for practical drone
+    operation (alpha ≈ 0.0001, violated 47% of steps, ratio up to 20M×).
+
+    Stage 2.2 drops the terminal constraint and uses only P_DARE as
+    terminal cost. This retains the essential infinite-horizon cost
+    structure without infeasibility risk from a tight terminal set.
+
 Imports:
-    quadrotor_3d_model.py   → create_plant_simulator(), NX, NU
-    ocp_config_basic.py     → create_solver()
-    plot_utils.py           → plot_states(), plot_inputs(), plot_3d_trajectory()
+    quadrotor_3d_model.py        → create_plant_simulator(), normalize_quaternion(),
+                                    NX, NU
+    ocp_config_dare.py           → create_solver()  (Stage 2.2, DARE only)
+    plot_utils.py                → plot_states(), plot_inputs(), plot_3d_trajectory()
 """
 
 import os
@@ -16,10 +26,11 @@ import numpy as np
 
 from quadrotor_3d_model        import (create_plant_simulator, normalize_quaternion,
                                        NX, NU)
-from ocp_config_basic          import create_solver
+from ocp_config_dare           import create_solver
 from plot_utils                import plot_states, plot_inputs, plot_3d_trajectory
 
-RESULTS_DIR = os.path.join('results', 'stage1_basic')
+RESULTS_DIR = os.path.join('results', 'stage2.2_dare')
+
 
 # ─────────────────────────────────────────────────────────────────
 # Closed-Loop Simulation
@@ -101,9 +112,9 @@ def simulate(x0:        np.ndarray,
 # ─────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
 
-    # reference: hover at (1.0, 0.5, 1.5), level attitude, zero velocity
+    # reference: hover at (5.0, 0.5, 6.5), level attitude, zero velocity
     x_ref = np.array([
-        1.0, 0.5, 1.5,        # px, py, pz
+        5.0, 0.5, 6.5,        # px, py, pz
         0.0, 0.0, 0.0,        # vx, vy, vz
         1.0, 0.0, 0.0, 0.0,   # qw, qx, qy, qz   (identity = level)
         0.0, 0.0, 0.0         # p, q, r
@@ -118,11 +129,11 @@ if __name__ == '__main__':
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
     plot_states(X, Ts, x_ref,
-                title='Stage 1 — State Trajectory (Simple Terminal Cost)',
+                title='Stage 2.2 — State Trajectory (DARE Terminal Cost)',
                 save_path=os.path.join(RESULTS_DIR, 'states.png'))
     plot_inputs(U, Ts,
-                title='Stage 1 — Input Trajectory (Simple Terminal Cost)',
+                title='Stage 2.2 — Input Trajectory (DARE Terminal Cost)',
                 save_path=os.path.join(RESULTS_DIR, 'inputs.png'))
     plot_3d_trajectory(X, x_ref,
-                       title='Stage 1 — 3D Flight Path (Simple Terminal Cost)',
+                       title='Stage 2.2 — 3D Flight Path (DARE Terminal Cost)',
                        save_path=os.path.join(RESULTS_DIR, 'trajectory_3d.png'))
