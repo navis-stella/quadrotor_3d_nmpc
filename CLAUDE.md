@@ -22,15 +22,12 @@
 
 | File | Role |
 |---|---|
-| `quadrotor_3d_model.py` | CasADi symbolic model (`create_model`), hover linearization (`get_hover_linearization`), `AcadosSimSolver` plant (`create_plant_simulator`), numeric ODE + RK4 backup, quaternion utilities (`normalize_quaternion`, `quat_to_euler`). Physical params + `NX=13`, `NU=4`. |
-| `plot_utils.py` | Shared plotting functions used by all simulation scripts: `plot_states`, `plot_inputs`, `plot_3d_trajectory`, `plot_terminal_constraint`. |
-| `ocp_config_basic.py` | **Stage 1** — Simple terminal cost `W_e = Q`, no terminal constraint. |
-| `simulate_basic.py` | **Stage 1** — Closed-loop sim + plots. Results saved to `results/stage1_basic/`. |
-| `compute_qih_params.py` | **Stage 2.1** — Offline QIH parameter computation: CARE, modified Lyapunov equation, terminal set alpha, Lipschitz verification. |
-| `ocp_config_qih.py` | **Stage 2.1** — QIH-NMPC solver with `W_e = P_lyap` + soft terminal set constraint. |
-| `simulate_qih.py` | **Stage 2.1** — QIH simulation + terminal constraint diagnostic plots. Results saved to `results/stage2_1_qih/`. |
-| `ocp_config_dare.py` | **Stage 2.2** — DARE-based terminal cost `W_e = P_lqr`, no terminal constraint. Reduced-order DARE (qw removed). |
-| `simulate_dare.py` | **Stage 2.2** — Closed-loop sim + plots. Results saved to `results/stage2_2_dare/`. |
+| `quadrotor_3d_model.py` | CasADi symbolic model (`create_model`), hover linearization (`get_hover_linearization`), disturbance model (`create_disturbance_model`), augmented dynamics (`get_augmented_dynamics_casadi`), `AcadosSimSolver` plant (`create_plant_simulator`, `create_disturbance_plant`), numeric ODE + RK4 backup, quaternion utilities (`normalize_quaternion`, `quat_to_euler`). Physical params + `NX=13`, `NU=4`, `ND=6`, `NZ=19`. |
+| `plot_utils.py` | Shared plotting functions used by all simulation scripts: `plot_states`, `plot_inputs`, `plot_3d_trajectory`, `plot_terminal_constraint`, `plot_disturbance`. |
+| `ss_target.py` | Steady-state target calculator for offset-free NMPC: analytical equilibrium (x_s, u_s) from force/torque balance under d̂. Motor mixer inversion. `compute_ss_target()`, `print_ss_target()`. |
+| `ekf_aug.py` | **Stage 3** — Augmented EKF (`AugEKF`): estimates `z = [x(13); d(6)]`, disturbance adaptation via cross-covariance. Default tuning in `get_default_ekf_tuning()`. |
+| `ocp_config_offsetfree.py` | **Stage 3** — Offset-free NMPC solver: disturbance model with `p = d̂`, DARE terminal cost. Helpers: `set_disturbance_param()`, `set_reference()`. |
+| `simulate_offsetfree.py` | **Stage 3** — Closed-loop offset-free sim with EKF + steady-state target + disturbance scenario. Results saved to `results/stage3_offsetfree/`. |
 
 ## Model conventions
 

@@ -10,7 +10,7 @@ defaults here, so each simulation script controls its own labeling.
 import numpy as np
 import matplotlib.pyplot as plt
 
-from quadrotor_3d_model import quat_to_euler, f_hover, NU
+from quadrotor_3d_model import quat_to_euler, f_hover, NU, ND
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -232,6 +232,55 @@ def plot_terminal_constraint(X_N:       np.ndarray,
           f'({100*n_violated/n_sim:.0f}%)')
     print(f'    steps feasible      = {n_sim - n_violated}/{n_sim}  '
           f'({100*(n_sim - n_violated)/n_sim:.0f}%)')
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150)
+    plt.show()
+    print(f'Plot saved: {save_path}')
+
+
+# ─────────────────────────────────────────────────────────────────
+# Disturbance Estimation  (EKF stages)
+# ─────────────────────────────────────────────────────────────────
+def plot_disturbance(D_hat:     np.ndarray,
+                     D_true:    np.ndarray,
+                     Ts:        float,
+                     title:     str,
+                     save_path: str):
+    """
+    Plot estimated vs true disturbance over time (2 rows × 3 columns).
+
+    Layout:
+        Row 0:  d_fx, d_fy, d_fz   (force disturbances)
+        Row 1:  d_τx, d_τy, d_τz   (torque disturbances)
+
+    Used by any stage with EKF disturbance estimation.
+    """
+    n = D_hat.shape[0]
+    t = np.arange(n) * Ts
+
+    fig, axes = plt.subplots(2, 3, figsize=(15, 7))
+    fig.suptitle(title, fontsize=14)
+
+    force_labels  = ['d_fx [N]', 'd_fy [N]', 'd_fz [N]']
+    torque_labels = ['d_τx [N·m]', 'd_τy [N·m]', 'd_τz [N·m]']
+
+    for i in range(3):
+        ax = axes[0][i]
+        ax.plot(t, D_true[:, i], 'r--', lw=1.5, label='true')
+        ax.plot(t, D_hat[:, i],  'b',   lw=1.2, label='estimated')
+        ax.set_ylabel(force_labels[i])
+        ax.set_xlabel('t [s]')
+        ax.legend(fontsize=7)
+        ax.grid(True, alpha=0.3)
+
+        ax = axes[1][i]
+        ax.plot(t, D_true[:, 3+i], 'r--', lw=1.5, label='true')
+        ax.plot(t, D_hat[:, 3+i],  'b',   lw=1.2, label='estimated')
+        ax.set_ylabel(torque_labels[i])
+        ax.set_xlabel('t [s]')
+        ax.legend(fontsize=7)
+        ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
     plt.savefig(save_path, dpi=150)
