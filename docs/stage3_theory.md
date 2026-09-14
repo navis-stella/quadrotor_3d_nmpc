@@ -128,7 +128,9 @@ $$x_b = y_b \times z_b \qquad \text{(completes a right-handed, orthonormal frame
 
 $$R_s = [x_b \mid y_b \mid z_b] \qquad \text{(columns — body axes expressed in world frame)}$$
 
-$$q_s = \text{rotmat\_to\_quat}(R_s) \qquad \text{(Shepperd's method; } q_w > 0 \text{ hemisphere enforced)}$$
+```math
+q_s = \text{rotmat\_to\_quat}(R_s) \qquad \text{(Shepperd's method; } q_w > 0 \text{ hemisphere enforced)}
+```
 
 **(3) Torque balance (body frame, $\omega = 0$ → no gyroscopic term) → motor mixer inversion.**
 
@@ -174,7 +176,7 @@ Per control step $k$, in the order `simulate_offsetfree.py` executes them:
 1. **Measure** $y = x_k$ (full-state feedback per the project's measurement assumption).
 2. **EKF update($y$)** — always runs, whether or not offset-free correction is active, so $\hat{d}$ is already converged by the time it's needed. → yields $\hat{x}$, $\hat{d}$.
 3. **Activation switch.**
-   - $t \geq T_{\text{ACTIVATE}}$: compute $(x_s, u_s) = \text{ss\_target}(x_{\text{ref}}, \hat{d})$; inject $\hat{d}$ as the OCP parameter at every node; set the reference to $(x_s, u_s)$ — **offset-free ON**.
+   - $t \geq T_{\text{ACTIVATE}}$: compute $`(x_s, u_s) = \text{ss\_target}(x_{\text{ref}}, \hat{d})`$; inject $\hat{d}$ as the OCP parameter at every node; set the reference to $(x_s, u_s)$ — **offset-free ON**.
    - $t < T_{\text{ACTIVATE}}$: inject $d = 0$; keep the reference at $(x_{\text{ref}}, u_{\text{hover}})$ — **standard MPC**, the Stage 2 baseline, for direct comparison inside the same run.
 4. **Solve the OCP** with $x_0$ fixed to the measured state ($\text{lbx} = \text{ubx} = x_k$), `SQP_RTI` (one Gauss-Newton/QP iteration per call — real-time iteration).
 5. **Apply** $u_k$ = the first control action from the solution.
