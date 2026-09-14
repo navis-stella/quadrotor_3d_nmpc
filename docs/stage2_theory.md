@@ -67,14 +67,14 @@ control direction), and keeping it in would make the linearization rank-deficien
 solve. $P_{\text{care}}$ and $K$ are computed on this reduced 12-state system; $q_w$ is re-inserted later
 with its own (non-Lyapunov) weight from $Q$.
 
-The Hurwitz property is checked explicitly ($\max \operatorname{Re}(\operatorname{eig}(A_K)) < 0$) rather than assumed.
+The Hurwitz property is checked explicitly ($\max \mathrm{Re}(\mathrm{eig}(A_K)) < 0$) rather than assumed.
 
 **Step 2 — Choose $\kappa$ and solve the modified Lyapunov equation for $P$.**
-Pick $\kappa$ satisfying $0 < \kappa < -\max \operatorname{Re}(\lambda(A_K))$ (implementation: a fixed fraction,
-`kappa_fraction`, of the stability margin $|\max \operatorname{Re}(\lambda(A_K))|$), ensuring $A_K + \kappa I$ is still
+Pick $\kappa$ satisfying $0 < \kappa < -\max \mathrm{Re}(\lambda(A_K))$ (implementation: a fixed fraction,
+`kappa_fraction`, of the stability margin $|\max \mathrm{Re}(\lambda(A_K))|$), ensuring $A_K + \kappa I$ is still
 Hurwitz. Then solve:
 
-$$(A_K + \kappa I)^\top P + P\,(A_K + \kappa I) = -Q^*, \qquad Q^* = Q + K^\top R\, K$$
+$$(A_K + \kappa I)^\top P + P(A_K + \kappa I) = -Q^\*, \qquad Q^\* = Q + K^\top R K$$
 
 for $P \succ 0$. This is **not** the same equation as the CARE in Step 1 — this is the key
 theoretical distinction worth keeping straight:
@@ -112,7 +112,7 @@ $$\varphi(x) = f(x,\, Kx) - A_K\, x$$
 
 and its local Lipschitz-type bound over the candidate region:
 
-$$L_\varphi = \sup \left\{ \frac{\|\varphi(x)\|}{\|x\|} \;:\; x \in \mathcal{X}_\alpha,\; x \neq 0 \right\}$$
+$$L_\varphi = \sup \{ \frac{\|\varphi(x)\|}{\|x\|} \;:\; x \in \mathcal{X}_\alpha,\; x \neq 0 \}$$
 
 The terminal-region certificate requires:
 
