@@ -163,6 +163,26 @@ First solver build compiles C code (~30 s); `c_generated_code/` is regenerated o
 
 **Offset-Free NMPC (Stage 3).** Nominal NMPC has no integral action: under a persistent disturbance (wind, mass mismatch, CoG offset) the closed loop settles at a *neighboring* equilibrium rather than the true reference, since the receding-horizon control law reacts to state error but its internal model doesn't know the disturbance exists. Stage 3 fixes this the textbook way — via an augmented disturbance model: a 6-state constant disturbance `d = [d_fx, d_fy, d_fz, d_tx, d_ty, d_tz]` is estimated online by an EKF (`z = [x; d] ∈ R^19`) and fed into the NMPC prediction model as a runtime parameter. Because the corrected model now predicts hover at level attitude as physically impossible under wind, an analytical **steady-state target calculator** solves the force/torque balance for the achievable equilibrium `(x_s, u_s)` (tilted attitude, redistributed motor thrust) each step, and the NMPC tracks that instead of the fixed, physically-inconsistent reference. → [derivation, EKF/target-calculator logic, and flow chart](docs/stage3_theory.md)
 
+## Stage 1 — Basic NMPC: Demonstration Results
+
+Scenario (`simulate_basic.py`): hover-to-hover step from the origin to `x_ref = (1.0, 0.5, 1.5)` m, `T_sim = 5 s`, no terminal set — just `W_e = Q`.
+
+![State trajectory](results/stage1_basic/states.png)
+![Input trajectory](results/stage1_basic/inputs.png)
+
+
+With no terminal set to shape the early transient, the solver uses the full actuation range immediately: all four motors saturate near `f_max ≈ 7.35 N` (`= 3·f_hover`) at `t = 0`, then swing down to the lower bound (`0 N`) by `t ≈ 0.3 s`, before settling to `f_hover ≈ 2.45 N` by `t ≈ 2 s`. Attitude reflects the same aggressiveness — pitch swings from `+27°` to `−14°` and back before settling, roll from `−15°` to `+7°` — a two-sided overshoot with no mechanism holding it back, since a soft terminal-cost-only formulation has no guarantee against it, only a tendency to eventually damp it out. Position converges cleanly onto `x_ref` by `t ≈ 2 s` and holds for the remaining `3 s` of the run — visually indistinguishable, at this precision, from an exact zero steady-state error, even though the formulation's only proven property is *practical* (not asymptotic) stability. That gap between "looks converged" and "is provably converged" is exactly what Stage 2 is for.
+
+## Stage 2.1 — Quasi-Infinite Horizon: Terminal Constraint Diagnostic
+
+Rather than repeat Stage 1's state/input plots (see the note below), Stage 2.1's demonstration is the one artifact specific to QIH: whether and when the trajectory enters the invariant terminal set `Ω_α`.
+
+![QIH terminal constraint diagnostic](results/stage2.1_qih/terminal-constraint_diagnostic.png)
+
+`V_N = Δx_N^T P_lyap Δx_N` starts around `5×10³` — many orders of magnitude above `α = 10⁻⁴` — meaning the terminal-set constraint is infeasible at the start and the softening (L1+L2 slack) is actively doing its job, exactly as it's designed to under a large initial displacement. `V_N` decreases essentially monotonically (visible discretization "steps" from `SQP_RTI`'s single QP iteration per sample) and crosses `α` at `t ≈ 2.3 s` — a little under half the 5 s run. From that point on the trajectory is *inside* `Ω_α`, the slack is inactive, and the formulation's asymptotic-stability guarantee formally applies for the remainder of the run; before that point, the guarantee is "the solver stays feasible," not "the trajectory is provably converging," which is the honest distinction a soft terminal constraint gives you.
+
+**Why no separate Stage 2 state/input plots.** Both Stage 2.1 (QIH) and Stage 2.2 (DARE) are run on the same nominal, disturbance-free scenario as Stage 1, and their state/input trajectories come out visually identical to Stage 1's — which is expected, not a null result. What QIH and DARE add over Stage 1 is a *proof* about behavior in regimes this nominal run doesn't exercise (formal asymptotic convergence via a Control Lyapunov Function, and, for QIH specifically, recursive feasibility under the terminal set) — not a different nominal trajectory. Reproducing near-duplicate galleries for all three would suggest a difference that isn't there and wouldn't actually demonstrate what each method contributes; the terminal-constraint diagnostic above is the one plot that does.
+
 ## Stage 3 — Offset-Free NMPC: Demonstration Results
 
 Validation scenario (`simulate_offsetfree.py`): a constant disturbance (`d_fx = 0.5 N` wind, `d_fy = −0.3 N` wind, `d_fz = −2.943 N` ≈ 30 % mass error) is active on the plant from `t = 0`; offset-free correction switches on at `T_ACTIVATE = 4 s`. This isolates the failure mode (pink shading, standard MPC) from the fix (green shading, offset-free ON) within a single run.
