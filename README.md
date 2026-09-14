@@ -33,9 +33,9 @@ where $f_{\text{total}} = f_1 + f_2 + f_3 + f_4$ and $R(q)_{:,2}$ is the body z-
 
 $$\begin{aligned}
 \dot{q}_w &= -0.5\,(q_x p + q_y q + q_z r) \\
-\dot{q}_x &= \phantom{-}0.5\,(q_w p + q_y r - q_z q) \\
-\dot{q}_y &= \phantom{-}0.5\,(q_w q - q_x r + q_z p) \\
-\dot{q}_z &= \phantom{-}0.5\,(q_w r + q_x q - q_y p)
+\dot{q}_x &= \quad 0.5\,(q_w p + q_y r - q_z q) \\
+\dot{q}_y &= \quad 0.5\,(q_w q - q_x r + q_z p) \\
+\dot{q}_z &= \quad 0.5\,(q_w r + q_x q - q_y p)
 \end{aligned}$$
 
 equivalently $\dot{q} = 0.5 \cdot q \otimes [0, p, q, r]$.
