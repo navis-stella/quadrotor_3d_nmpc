@@ -1,15 +1,15 @@
 """
-quadrotor_3d_model.py — Full 3D Quadrotor Model (Quaternion)
-==============================================================
-Contains:
-  - Physical parameters
-  - CasADi symbolic model              (used by acados NMPC solver)
-  - Hover linearization                (used for DARE terminal cost)
-  - Disturbance model (Stage 3)        (MPC + plant with disturbance parameters)
-  - Augmented model (Stage 3)          (EKF: 13 states + 6 disturbances = 19)
-  - AcadosSimSolver plant creator      (used as plant in simulation)
-  - Numerical ODE + RK4 backup         (for future model mismatch testing)
-  - Quaternion normalization utility
+quadrotor_3d_model.py — All Stages Full 3D Quadrotor Model (Quaternion)
+=======================================================================
+Single source of the physics for every stage. Contains:
+  - Physical parameters, dimensions, motor mixer, operating envelope
+  - Quaternion utilities                (numpy + CasADi)
+  - Disturbance model                   (MPC prediction model + plant)
+  - Augmented model z = [x; d]          (EKF: CasADi functions,
+                                          MHE: acados model with process noise)
+  - Measurement model y = [p; q; ω]     (sensor, EKF, MHE, observability)
+  - Hover point + linearization         (DARE terminal cost, observability)
+  - AcadosSimSolver plant
 
 State (13):
     x = [px, py, pz, vx, vy, vz, qw, qx, qy, qz, p, q, r]
@@ -40,31 +40,32 @@ Motor layout (+ configuration, top view, z-up):
 
 Quaternion convention:
     q = [qw, qx, qy, qz]   scalar-first
-    ||q|| = 1                unit norm constraint
+    ||q|| = 1              unit norm constraint
     Hover reference: q = [1, 0, 0, 0] (identity rotation)
     q and -q represent the same rotation (double cover)
 
     Rotation matrix R(q) transforms body → world:
         v_world = R(q) @ v_body
 
-Stage 3 — Offset-free NMPC:
-    Disturbance states (6):
-        d = [d_fx, d_fy, d_fz, d_tx, d_ty, d_tz]
+Disturbance (Stage 3 onward):
+    d = [d_fx, d_fy, d_fz, d_tx, d_ty, d_tz]
 
-        d_fx, d_fy, d_fz   [N]     constant force disturbance (world frame)
-                                     covers: wind, mass error (Δm·g in z)
-        d_tx, d_ty, d_tz   [N·m]   constant torque disturbance (body frame)
-                                     covers: CoG offset (parasitic torques)
+    d_fx, d_fy, d_fz   [N]     constant force disturbance (world frame)
+                                 covers: wind, mass error (Δm·g in z)
+    d_tx, d_ty, d_tz   [N·m]   constant torque disturbance (body frame)
+                                 covers: CoG offset (parasitic torques)
 
-        Disturbance dynamics: d_dot = 0 (constant disturbance assumption)
+    Where d lives in each component:
+        MPC prediction  create_disturbance_model()   p = d̂        (parameter)
+        Plant           create_disturbance_plant()   p = d_true   (parameter)
+        EKF             get_augmented_dynamics()     z = [x; d], ḋ = 0
+        MHE             create_mhe_model()           z = [x; d], ż = f_aug + w
 
-    Architecture:
-        MPC solver  → uses create_disturbance_model()
-                       d enters as runtime parameter p, set from EKF estimate d̂
-        Plant sim   → uses create_disturbance_plant()
-                       d enters as runtime parameter p, set to true disturbance
-        EKF         → uses get_augmented_dynamics_casadi()
-                       augmented state z = [x(13); d(6)], NZ = 19
+Measurement (Stage 4):
+    y = [px, py, pz, qw, qx, qy, qz, p, q, r]   (NY = 10)
+    → position, quaternion, angular velocity directly measured
+    → velocity v and disturbance d inferred by the estimator
+    h(z) is LINEAR ⇒ H = ∂h/∂z is a constant selection matrix (IDX_Y).
 """
 
 import numpy as np
@@ -84,17 +85,42 @@ c_tau = 0.0036    # [m]      thrust-to-reactive-torque coefficient
 
 f_hover = m * g / 4.0    # [N] hover thrust per motor ≈ 2.45 N
 
-# State and input dimensions
-NX = 13   # 3 pos + 3 vel + 4 quat + 3 angular vel
-NU = 4
+# ─────────────────────────────────────────────────────────────────
+# Dimensions
+# ─────────────────────────────────────────────────────────────────
+NX = 13        # 3 pos + 3 vel + 4 quat + 3 angular vel
+NU = 4         # motor thrusts
+ND = 6         # 3 force (world) + 3 torque (body)
+NZ = NX + ND   # 19 — augmented state z = [x; d]   (EKF and MHE)
+NY = 10        # 3 pos + 4 quat + 3 angular vel  —  y = [p; q; ω]
+NW = NZ        # 19 — MHE process noise, additive on every derivative of z
 
-# Disturbance dimensions (Stage 3)
-ND = 6    # 3 force (world) + 3 torque (body)
-NZ = NX + ND   # 19 — augmented state dimension for EKF
+IDX_Y = np.array([0, 1, 2, 6, 7, 8, 9, 10, 11, 12])   # y = z[IDX_Y]
+
+# ─────────────────────────────────────────────────────────────────
+# Motor Mixer and Operating Envelope
+# ─────────────────────────────────────────────────────────────────
+#   [T_total]     [  1       1       1       1    ] [f1]
+#   [tau_x  ]  =  [  0      -L       0       L    ] [f2]
+#   [tau_y  ]     [ -L       0       L       0    ] [f3]
+#   [tau_z  ]     [-c_tau   c_tau  -c_tau   c_tau ] [f4]
+#
+#   Used symbolically by the dynamics and inverted by ss_target.
+MIXER = np.array([
+    [ 1.0,    1.0,     1.0,    1.0   ],
+    [ 0.0,   -L,       0.0,    L     ],
+    [-L,      0.0,     L,      0.0   ],
+    [-c_tau,  c_tau,  -c_tau,  c_tau ],
+])
+
+F_MAX     = 3.0 * f_hover   # [N]     motor thrust limit (MPC bound, ss_target clip)
+OMEGA_MAX = 2.0             # [rad/s] certified body-rate envelope of the MHE
+                            #         (detectability_check); the MPC keeps
+                            #         |ωᵢ| ≤ 0.9·OMEGA_MAX so the plant stays in it
 
 
 # ─────────────────────────────────────────────────────────────────
-# Quaternion Utility
+# Quaternion Utilities  (numpy)
 # ─────────────────────────────────────────────────────────────────
 def quat_to_euler(q: np.ndarray) -> np.ndarray:
     """
@@ -135,112 +161,87 @@ def quat_to_euler(q: np.ndarray) -> np.ndarray:
 
 def normalize_quaternion(x: np.ndarray) -> np.ndarray:
     """
-    Normalize the quaternion components in the state vector.
-    Call after each integration step to prevent drift from ||q|| = 1.
+    Normalize the quaternion slots x[6:10] of a state (13) or augmented
+    state (19) in place. Call after each integration step to prevent drift
+    from ||q|| = 1.
 
     Also enforces qw > 0 convention to avoid the double-cover ambiguity
     (q and -q represent the same rotation — we pick the qw > 0 hemisphere).
     """
-    qw, qx, qy, qz = x[6], x[7], x[8], x[9]
-    q_norm = np.sqrt(qw**2 + qx**2 + qy**2 + qz**2)
-    x[6] /= q_norm
-    x[7] /= q_norm
-    x[8] /= q_norm
-    x[9] /= q_norm
-    # enforce qw > 0 hemisphere
+    q_norm = np.linalg.norm(x[6:10])
+    if q_norm > 1e-12:
+        x[6:10] /= q_norm
     if x[6] < 0:
         x[6:10] *= -1
     return x
 
 
 # ─────────────────────────────────────────────────────────────────
-# Helper: Core Symbolic Dynamics (shared by all model variants)
+# Quaternion Utilities  (CasADi — used by the MHE cost)
+# ─────────────────────────────────────────────────────────────────
+def quat_multiply_casadi(q1, q2):
+    """
+    Hamilton product  q1 ⊗ q2  for scalar-first quaternions (CasADi SX/MX).
+    Convention: q = [qw, qx, qy, qz].
+    """
+    w = q1[0]*q2[0] - q1[1]*q2[1] - q1[2]*q2[2] - q1[3]*q2[3]
+    x = q1[0]*q2[1] + q1[1]*q2[0] + q1[2]*q2[3] - q1[3]*q2[2]
+    y = q1[0]*q2[2] - q1[1]*q2[3] + q1[2]*q2[0] + q1[3]*q2[1]
+    z = q1[0]*q2[3] + q1[1]*q2[2] - q1[2]*q2[1] + q1[3]*q2[0]
+    return ca.vertcat(w, x, y, z)
+
+
+def quat_error_casadi(q_hat, q_ref):
+    """
+    Error quaternion  q_err = q_hat ⊗ q_ref⁻¹  (CasADi symbolic).
+
+    For unit inputs, q_err → ±[1, 0, 0, 0] when q_hat and q_ref represent
+    the same rotation (double cover of SO(3)). The MHE cost combines this
+    with  fabs(q_err) − [1, 0, 0, 0]  so the term vanishes for both signs
+    and stays smooth.
+    """
+    q_ref_inv = ca.vertcat(q_ref[0], -q_ref[1], -q_ref[2], -q_ref[3])
+    return quat_multiply_casadi(q_hat, q_ref_inv)
+
+
+# ─────────────────────────────────────────────────────────────────
+# Core Symbolic Dynamics  (shared by every model variant)
 # ─────────────────────────────────────────────────────────────────
 def _build_core_symbols():
     """
-    Create the shared CasADi symbolic variables for the quadrotor.
-
-    Returns a dict with all symbolic states, inputs, and intermediate
-    quantities (T_total, tau_x, tau_y, tau_z) that every model variant
-    needs. This avoids code duplication between create_model(),
-    create_disturbance_model(), and get_augmented_dynamics_casadi().
+    Shared CasADi symbols: state x (13), input u (4) and the thrust /
+    torque wrench [T_total, tau_x, tau_y, tau_z] = MIXER @ u.
     """
-    # ── Symbolic states ────────────────────────────────────────
-    px  = ca.SX.sym('px')
-    py  = ca.SX.sym('py')
-    pz  = ca.SX.sym('pz')
-    vx  = ca.SX.sym('vx')
-    vy  = ca.SX.sym('vy')
-    vz  = ca.SX.sym('vz')
-    qw  = ca.SX.sym('qw')
-    qx  = ca.SX.sym('qx')
-    qy  = ca.SX.sym('qy')
-    qz  = ca.SX.sym('qz')
-    p   = ca.SX.sym('p')
-    q   = ca.SX.sym('q')
-    r   = ca.SX.sym('r')
-
-    x = ca.vertcat(px, py, pz, vx, vy, vz, qw, qx, qy, qz, p, q, r)
-
-    # ── Symbolic inputs ────────────────────────────────────────
-    f1 = ca.SX.sym('f1')
-    f2 = ca.SX.sym('f2')
-    f3 = ca.SX.sym('f3')
-    f4 = ca.SX.sym('f4')
-    u  = ca.vertcat(f1, f2, f3, f4)
-
-    # ── Thrust and torques from motor forces ───────────────────
-    T_total = f1 + f2 + f3 + f4
-    tau_x   = L * (f4 - f2)
-    tau_y   = L * (f3 - f1)
-    tau_z   = c_tau * (-f1 + f2 - f3 + f4)
-
-    return {
-        # Individual symbolic scalars
-        'px': px, 'py': py, 'pz': pz,
-        'vx': vx, 'vy': vy, 'vz': vz,
-        'qw': qw, 'qx': qx, 'qy': qy, 'qz': qz,
-        'p': p, 'q': q, 'r': r,
-        'f1': f1, 'f2': f2, 'f3': f3, 'f4': f4,
-        # Assembled vectors
-        'x': x, 'u': u,
-        # Derived quantities
-        'T_total': T_total,
-        'tau_x': tau_x, 'tau_y': tau_y, 'tau_z': tau_z,
-    }
+    x = ca.SX.sym('x', NX)
+    u = ca.SX.sym('u', NU)
+    wrench = ca.mtimes(ca.DM(MIXER), u)
+    return {'x': x, 'u': u, 'T_total': wrench[0], 'tau': wrench[1:4]}
 
 
-def _build_f_expl(s, d_fx=0, d_fy=0, d_fz=0, d_tx=0, d_ty=0, d_tz=0):
+def _build_f_expl(s, d=None):
     """
-    Assemble the explicit ODE xdot = f(x, u, d) from the core symbols.
+    Explicit ODE  ẋ = f(x, u, d)  from the core symbols.
 
-    The disturbance terms d_fx..d_tz default to 0 (no disturbance),
-    allowing the same function to serve:
-      - Nominal model:       d = 0
-      - Disturbance model:   d = symbolic parameters or states
+    d = None gives the nominal drift (d = 0); otherwise d is a 6-vector
+    (symbolic parameter or state) injected as:
 
-    Disturbance injection:
         d_fx, d_fy, d_fz  →  translational dynamics (world frame)
-            dvx += d_fx / m
-            dvy += d_fy / m
-            dvz += d_fz / m
-
+            v̇ += d_f / m
         d_tx, d_ty, d_tz  →  rotational dynamics (body frame)
-            dp += d_tx / Ixx
-            dq += d_ty / Iyy
-            dr += d_tz / Izz
+            ω̇ += I⁻¹ d_τ
     """
-    qw = s['qw']; qx = s['qx']; qy = s['qy']; qz = s['qz']
-    p  = s['p'];  q  = s['q'];  r  = s['r']
-    vx = s['vx']; vy = s['vy']; vz = s['vz']
-    T_total = s['T_total']
-    tau_x = s['tau_x']; tau_y = s['tau_y']; tau_z = s['tau_z']
+    x, T_total, tau = s['x'], s['T_total'], s['tau']
+    vx, vy, vz     = x[3], x[4], x[5]
+    qw, qx, qy, qz = x[6], x[7], x[8], x[9]
+    p,  q,  r      = x[10], x[11], x[12]
+    if d is None:
+        d = ca.SX.zeros(ND)
 
     # ── Subsystem 1: Translational dynamics (world frame) ──────
     #    Only the third column of R(q) is needed for thrust direction.
-    dvx = T_total / m * 2 * (qx*qz + qw*qy)            + d_fx / m
-    dvy = T_total / m * 2 * (qy*qz - qw*qx)            + d_fy / m
-    dvz = T_total / m * (1 - 2*(qx**2 + qy**2)) - g     + d_fz / m
+    dvx = T_total / m * 2 * (qx*qz + qw*qy)            + d[0] / m
+    dvy = T_total / m * 2 * (qy*qz - qw*qx)            + d[1] / m
+    dvz = T_total / m * (1 - 2*(qx**2 + qy**2)) - g    + d[2] / m
 
     # ── Subsystem 2: Quaternion kinematics ─────────────────────
     #    q_dot = 0.5 * q ⊗ [0, p, q, r]    (no disturbance here)
@@ -250,9 +251,9 @@ def _build_f_expl(s, d_fx=0, d_fy=0, d_fz=0, d_tx=0, d_ty=0, d_tz=0):
     dqz = 0.5 * ( qw*r + qx*q - qy*p)
 
     # ── Subsystem 3: Rotational dynamics (Euler's equations) ───
-    dp_dt = (Iyy - Izz) / Ixx * q * r + tau_x / Ixx     + d_tx / Ixx
-    dq_dt = (Izz - Ixx) / Iyy * p * r + tau_y / Iyy     + d_ty / Iyy
-    dr_dt = (Ixx - Iyy) / Izz * p * q + tau_z / Izz     + d_tz / Izz
+    dp_dt = (Iyy - Izz) / Ixx * q * r + tau[0] / Ixx     + d[3] / Ixx
+    dq_dt = (Izz - Ixx) / Iyy * p * r + tau[1] / Iyy     + d[4] / Iyy
+    dr_dt = (Ixx - Iyy) / Izz * p * q + tau[2] / Izz     + d[5] / Izz
 
     return ca.vertcat(
         vx, vy, vz,                   # position kinematics
@@ -262,303 +263,211 @@ def _build_f_expl(s, d_fx=0, d_fy=0, d_fz=0, d_tx=0, d_ty=0, d_tz=0):
     )
 
 
-# ═════════════════════════════════════════════════════════════════
-# Model Variant 1: Nominal (Stages 1–2)
-# ═════════════════════════════════════════════════════════════════
-def create_model() -> AcadosModel:
+def _build_augmented():
     """
-    Full 3D quadrotor nonlinear dynamics — no disturbance.
-    Used by Stages 1–2 (basic NMPC, DARE, QIH).
+    Augmented dynamics shared by the EKF and the MHE:
+
+        z = [x(13); d(6)],     ż = f_aug(z, u) = [ f(x, u, d) ; 0 ]
+
+    ḋ = 0 is the constant-disturbance assumption. Both estimators
+    discretize exactly this expression — the EKF by RK4 + Euler-linearized
+    covariance, the MHE by acados ERK with process noise w added.
     """
     s = _build_core_symbols()
-    f_expl = _build_f_expl(s)
-
-    model             = AcadosModel()
-    model.name        = 'quadrotor_3d'
-    model.x           = s['x']
-    model.u           = s['u']
-    model.xdot        = ca.SX.sym('xdot', NX)
-    model.f_expl_expr = f_expl
-
-    return model
+    d = ca.SX.sym('d', ND)
+    z = ca.vertcat(s['x'], d)
+    z_dot = ca.vertcat(_build_f_expl(s, d), ca.SX.zeros(ND))
+    return z, s['u'], z_dot
 
 
 # ═════════════════════════════════════════════════════════════════
-# Model Variant 2: Disturbance as Runtime Parameter (Stage 3)
+# Disturbance as Runtime Parameter  (MPC prediction model + plant)
 # ═════════════════════════════════════════════════════════════════
 def create_disturbance_model() -> AcadosModel:
     """
     Quadrotor dynamics with disturbance forces/torques as runtime parameters.
 
     Used by:
-      - MPC solver:  set p = d̂  (EKF estimate) at each shooting node
+      - MPC solver:  set p = d̂  (estimate from EKF / MHE) at each shooting node
       - Plant sim:   set p = d_true (known external disturbance for testing)
 
-    The state dimension stays NX=13 — disturbances are NOT optimized.
-    The 6 disturbance parameters are set online via:
-        ocp_solver.set(stage, 'p', d_hat)       # MPC
-        plant_sim.set('p', d_true)               # plant
+    The state dimension stays NX = 13 — disturbances are NOT optimized.
 
     Parameter vector:
         p = [d_fx, d_fy, d_fz, d_tx, d_ty, d_tz]
-
-        d_fx, d_fy, d_fz  [N]    force disturbance (world frame)
-        d_tx, d_ty, d_tz  [N·m]  torque disturbance (body frame)
     """
     s = _build_core_symbols()
-
-    # ── Disturbance parameters ─────────────────────────────────
-    d_fx = ca.SX.sym('d_fx')    # force disturbance x  [N]
-    d_fy = ca.SX.sym('d_fy')    # force disturbance y  [N]
-    d_fz = ca.SX.sym('d_fz')    # force disturbance z  [N]
-    d_tx = ca.SX.sym('d_tx')    # torque disturbance x [N·m]
-    d_ty = ca.SX.sym('d_ty')    # torque disturbance y [N·m]
-    d_tz = ca.SX.sym('d_tz')    # torque disturbance z [N·m]
-    p    = ca.vertcat(d_fx, d_fy, d_fz, d_tx, d_ty, d_tz)
-
-    f_expl = _build_f_expl(s,
-                           d_fx=d_fx, d_fy=d_fy, d_fz=d_fz,
-                           d_tx=d_tx, d_ty=d_ty, d_tz=d_tz)
+    d = ca.SX.sym('d', ND)
 
     model             = AcadosModel()
     model.name        = 'quadrotor_3d_disturb'
     model.x           = s['x']
     model.u           = s['u']
-    model.p           = p
+    model.p           = d
     model.xdot        = ca.SX.sym('xdot', NX)
-    model.f_expl_expr = f_expl
+    model.f_expl_expr = _build_f_expl(s, d)
 
     return model
 
 
 # ═════════════════════════════════════════════════════════════════
-# Model Variant 3: Augmented Dynamics for EKF (Stage 3)
+# Augmented Model  (Stage 4 estimators)
 # ═════════════════════════════════════════════════════════════════
-def get_augmented_dynamics_casadi():
+def get_augmented_dynamics():
     """
-    Augmented system dynamics as CasADi function for the EKF.
-
-    Augmented state:
-        z = [x(13); d(6)] ∈ R^19
-
-        x = [px, py, pz, vx, vy, vz, qw, qx, qy, qz, p, q, r]
-        d = [d_fx, d_fy, d_fz, d_tx, d_ty, d_tz]
-
-    Augmented dynamics:
-        z_dot = [ f(x, u, d) ]     ← original dynamics with disturbance
-                [ 0           ]     ← constant disturbance assumption
+    Augmented dynamics as CasADi functions for the EKF.
 
     Returns:
-        f_aug:  CasADi Function  z_dot = f_aug(z, u)
-                Inputs:  z (19,), u (4,)
-                Outputs: z_dot (19,)
-
-        Also returns the symbolic Jacobians for EKF:
-        F_func: CasADi Function  df_aug/dz evaluated at (z, u)
-                Returns (19×19) matrix
+        f_aug:  CasADi Function  ż = f_aug(z, u)        (19,)
+        F_func: CasADi Function  ∂f_aug/∂z at (z, u)    (19×19)
 
     Usage in EKF:
         z_dot_val = f_aug(z_hat, u)                    # prediction
         F_val     = F_func(z_hat, u)                   # Jacobian for covariance
     """
-    s = _build_core_symbols()
-
-    # ── Disturbance states (part of augmented state, not parameters) ──
-    d_fx = ca.SX.sym('d_fx')
-    d_fy = ca.SX.sym('d_fy')
-    d_fz = ca.SX.sym('d_fz')
-    d_tx = ca.SX.sym('d_tx')
-    d_ty = ca.SX.sym('d_ty')
-    d_tz = ca.SX.sym('d_tz')
-    d    = ca.vertcat(d_fx, d_fy, d_fz, d_tx, d_ty, d_tz)
-
-    # Augmented state vector
-    z = ca.vertcat(s['x'], d)   # (19,)
-
-    # ── Augmented dynamics ─────────────────────────────────────
-    f_x = _build_f_expl(s,
-                        d_fx=d_fx, d_fy=d_fy, d_fz=d_fz,
-                        d_tx=d_tx, d_ty=d_ty, d_tz=d_tz)
-
-    f_d = ca.SX.zeros(ND)   # d_dot = 0 (constant disturbance)
-
-    z_dot = ca.vertcat(f_x, f_d)   # (19,)
-
-    # ── CasADi functions ───────────────────────────────────────
-    f_aug = ca.Function('f_aug', [z, s['u']], [z_dot],
-                        ['z', 'u'], ['z_dot'])
-
-    # Jacobian df_aug/dz for EKF covariance propagation
-    F_sym = ca.jacobian(z_dot, z)   # (19×19) symbolic
-    F_func = ca.Function('F_aug', [z, s['u']], [F_sym],
+    z, u, z_dot = _build_augmented()
+    f_aug  = ca.Function('f_aug', [z, u], [z_dot], ['z', 'u'], ['z_dot'])
+    F_func = ca.Function('F_aug', [z, u], [ca.jacobian(z_dot, z)],
                          ['z', 'u'], ['F'])
-
     return f_aug, F_func
 
 
-# ─────────────────────────────────────────────────────────────────
-# Linearization at Hover  (for DARE terminal cost — Stage 2)
-# ─────────────────────────────────────────────────────────────────
-def get_hover_linearization():
+def create_mhe_model() -> AcadosModel:
     """
-    Linearize 3D quadrotor dynamics at hover equilibrium.
+    Augmented dynamics as an acados model for the Lyapunov MHE.
 
-    Equilibrium: q=[1,0,0,0], p=q=r=0, fi=mg/4
+        ż = f_aug(z, u_rotor) + w,     z ∈ R^19,  w ∈ R^19 (NW)
 
-    Key couplings at hover (quaternion version):
-        qy → acceleration in x    (A[3,8]  = 2g)
-        qx → acceleration in -y   (A[4,7]  = -2g)
+    The MHE optimizes over z₀ and the process noise w, so the acados roles
+    are swapped with respect to the MPC:
 
-    Compare with Euler version:
-        θ  → acceleration in x    (A[3,7]  = g)
-        φ  → acceleration in -y   (A[4,6]  = -g)
+        model.x = z = [x(13); d(6)]
+        model.u = w         process noise — the MHE's decision variable
+        model.p = u_rotor   known rotor thrusts, set from the control history
+                            (ocp_config_mhe augments model.p further with the
+                             discount exponent, node flags, prior and y_meas)
 
-    The factor of 2 comes from the quaternion rotation matrix:
-    the derivative of R(q) w.r.t. qy at hover yields 2, not 1.
+    w_d makes d a random walk: the MHE pays 2‖w_d‖²_Q for every change of d̂,
+    and a constant d costs nothing once it has been learned.
+
+    Why this is certifiable (detectability_check): d enters f LINEARLY with
+    constant coefficients (d_f/m in v̇, I⁻¹d_τ in ω̇), so ∂f/∂z depends only on
+    (q, ω, T_total) — the vertex reduction of the LMI applies.
+    """
+    z, u, z_dot = _build_augmented()
+    w = ca.SX.sym('w', NW)
+
+    model             = AcadosModel()
+    model.name        = 'quadrotor_3d_mhe'
+    model.x           = z
+    model.u           = w              # MHE 'input' = process noise
+    model.p           = u              # rotor thrusts as known parameter
+    model.xdot        = ca.SX.sym('zdot', NZ)
+    model.f_expl_expr = z_dot + w
+
+    return model
+
+
+# ═════════════════════════════════════════════════════════════════
+# Measurement Model  (Stage 4)
+# ═════════════════════════════════════════════════════════════════
+def measurement_expr(z_sym):
+    """
+    y = h(z) = [p; q; ω] as a CasADi expression — the selection z[IDX_Y].
+
+    Works for the 13-dim state and the 19-dim augmented state (only the
+    first 13 entries are read; d is not measured). Used inside the MHE cost
+    and the detectability LMI.
+    """
+    return ca.vertcat(*[z_sym[int(i)] for i in IDX_Y])
+
+
+def get_measurement_function():
+    """
+    Measurement function for the augmented state z (19).
+
+    Stage 4 assumption: position p, quaternion q, and angular velocity ω
+    are directly measured (idealized outer pose source, mocap-equivalent).
+    Linear velocity v and disturbances d are unmeasured — inferred through
+    the model's kinematic and dynamic coupling.
 
     Returns:
-        A_c:  (13×13) continuous-time state Jacobian at hover
-        B_c:  (13×4)  continuous-time input Jacobian at hover
+        h_func:  CasADi Function  y = h(z),  z (19,) → y (10,)
+        H_z:     (10, 19) constant Jacobian ∂h/∂z  (EKF gain, observability)
     """
-    A_c = np.zeros((NX, NX))
+    z = ca.SX.sym('z', NZ)
+    h_func = ca.Function('h_meas', [z], [measurement_expr(z)], ['z'], ['y'])
+    H_z = np.eye(NZ)[IDX_Y]
+    return h_func, H_z
 
-    # Position kinematics: velocity → position
-    A_c[0, 3] = 1.0     # vx → dpx
-    A_c[1, 4] = 1.0     # vy → dpy
-    A_c[2, 5] = 1.0     # vz → dpz
 
-    # Translational dynamics: quaternion → acceleration
-    A_c[3, 8] = 2 * g     # qy → dvx
-    A_c[4, 7] = -2 * g    # qx → dvy
+def project_measurement(y: np.ndarray) -> np.ndarray:
+    """
+    Best guess of z from a single measurement — the common initial prior
+    z̄₀ of both estimators:
 
-    # Quaternion kinematics: angular velocity → quaternion derivative
-    A_c[7, 10] = 0.5     # p → dqx
-    A_c[8, 11] = 0.5     # q → dqy
-    A_c[9, 12] = 0.5     # r → dqz
-
-    B_c = np.zeros((NX, NU))
-
-    # Translational: all motors contribute equally to vertical acceleration
-    B_c[5, :] = 1.0 / m
-
-    # Roll:  tau_x = L*(f4-f2)
-    B_c[10, 1] = -L / Ixx
-    B_c[10, 3] =  L / Ixx
-
-    # Pitch: tau_y = L*(f3-f1)
-    B_c[11, 0] = -L / Iyy
-    B_c[11, 2] =  L / Iyy
-
-    # Yaw:   tau_z = c_tau*(-f1+f2-f3+f4)
-    B_c[12, 0] = -c_tau / Izz
-    B_c[12, 1] =  c_tau / Izz
-    B_c[12, 2] = -c_tau / Izz
-    B_c[12, 3] =  c_tau / Izz
-
-    return A_c, B_c
+        p, q, ω ← measured,    v ← 0,    d ← 0
+    """
+    z = np.zeros(NZ)
+    z[IDX_Y] = y
+    return z
 
 
 # ─────────────────────────────────────────────────────────────────
-# AcadosSim Plant Simulators
+# Hover Point + Linearization
 # ─────────────────────────────────────────────────────────────────
-def create_plant_simulator(T_horizon: float = 1.0,
-                           N: int = 20) -> AcadosSimSolver:
-    """
-    Create an AcadosSimSolver for plant simulation — no disturbance.
-    Used by Stages 1–2.
-
-    One call advances the plant by one sample time Ts = T_horizon/N.
-    Call normalize_quaternion(x) after each step.
-    """
-    model = create_model()
-    sim   = AcadosSim()
-    sim.model = model
-    sim.solver_options.T = T_horizon / N
-    sim.solver_options.integrator_type = 'ERK'
-    sim.solver_options.num_stages = 4
-    return AcadosSimSolver(sim)
+def hover_point():
+    """(z_hover (19), u_hover (4)) — rest at the origin, level, d = 0."""
+    z_hover = np.zeros(NZ)
+    z_hover[6] = 1.0                    # qw = 1 (identity quaternion)
+    return z_hover, np.full(NU, f_hover)
 
 
-def create_disturbance_plant(T_horizon: float = 1.0,
-                             N: int = 20) -> AcadosSimSolver:
+def get_hover_linearization():
     """
-    Create an AcadosSimSolver for plant simulation WITH disturbance.
-    Used by Stage 3.
+    Continuous-time linearization of the nominal dynamics (d = 0) at hover,
+    differentiated from the same CasADi model the solvers use.
+
+    Key couplings at hover (quaternion version):
+        qy → acceleration in x    (A[3,8]  =  2g)
+        qx → acceleration in -y   (A[4,7]  = -2g)
+    The factor 2 (vs g for Euler angles) comes from R(q): small-angle
+    φ ≈ 2 qx, θ ≈ 2 qy.
+
+    Returns:
+        A_c:  (13×13) state Jacobian at hover
+        B_c:  (13×4)  input Jacobian at hover
+    """
+    s = _build_core_symbols()
+    f = _build_f_expl(s)
+    jac = ca.Function('jac_hover', [s['x'], s['u']],
+                      [ca.jacobian(f, s['x']), ca.jacobian(f, s['u'])])
+    z_hover, u_hover = hover_point()
+    A_c, B_c = jac(z_hover[:NX], u_hover)
+    return A_c.full(), B_c.full()
+
+
+# ─────────────────────────────────────────────────────────────────
+# AcadosSim Plant
+# ─────────────────────────────────────────────────────────────────
+def create_disturbance_plant(Ts: float) -> AcadosSimSolver:
+    """
+    AcadosSimSolver plant WITH disturbance: one call advances by Ts.
 
     Usage:
         plant.set('x', x_current)
         plant.set('u', u_current)
         plant.set('p', d_true)          # ← set true disturbance
         plant.solve()
-        x_next = plant.get('x')
-        x_next = normalize_quaternion(x_next)
+        x_next = normalize_quaternion(plant.get('x'))
 
     The disturbance is integrated continuously within each step,
     not applied as a discrete impulse — physically correct.
     """
-    model = create_disturbance_model()
-    sim   = AcadosSim()
-    sim.model = model
-    sim.solver_options.T = T_horizon / N
+    sim = AcadosSim()
+    sim.model = create_disturbance_model()
+    sim.solver_options.T = Ts
     sim.solver_options.integrator_type = 'ERK'
     sim.solver_options.num_stages = 4
-
-    # Parameter dimensions must be set for AcadosSim
-    sim.parameter_values = np.zeros(ND)
-
+    sim.parameter_values = np.zeros(ND)     # dimension must be known
     return AcadosSimSolver(sim)
-
-
-# ─────────────────────────────────────────────────────────────────
-# Numerical ODE + RK4  (backup for model mismatch testing)
-# ─────────────────────────────────────────────────────────────────
-def f_ode(x: np.ndarray, u: np.ndarray,
-          d: np.ndarray = None) -> np.ndarray:
-    """
-    Same dynamics as create_model() but in numerical form.
-    Optional disturbance vector d = [d_fx, d_fy, d_fz, d_tx, d_ty, d_tz].
-    """
-    px, py, pz, vx, vy, vz, qw, qx, qy, qz, p, q, r = x
-    f1, f2, f3, f4 = u
-
-    if d is None:
-        d = np.zeros(ND)
-    d_fx, d_fy, d_fz, d_tx, d_ty, d_tz = d
-
-    T_total = f1 + f2 + f3 + f4
-    tau_x   = L * (f4 - f2)
-    tau_y   = L * (f3 - f1)
-    tau_z   = c_tau * (-f1 + f2 - f3 + f4)
-
-    # translational dynamics (world frame)
-    dvx = T_total / m * 2 * (qx*qz + qw*qy)         + d_fx / m
-    dvy = T_total / m * 2 * (qy*qz - qw*qx)         + d_fy / m
-    dvz = T_total / m * (1 - 2*(qx**2 + qy**2)) - g  + d_fz / m
-
-    # quaternion kinematics
-    dqw = 0.5 * (-qx*p - qy*q - qz*r)
-    dqx = 0.5 * ( qw*p + qy*r - qz*q)
-    dqy = 0.5 * ( qw*q - qx*r + qz*p)
-    dqz = 0.5 * ( qw*r + qx*q - qy*p)
-
-    # rotational dynamics (body frame)
-    dp = (Iyy - Izz) / Ixx * q*r + tau_x / Ixx       + d_tx / Ixx
-    dq = (Izz - Ixx) / Iyy * p*r + tau_y / Iyy       + d_ty / Iyy
-    dr = (Ixx - Iyy) / Izz * p*q + tau_z / Izz        + d_tz / Izz
-
-    return np.array([vx, vy, vz, dvx, dvy, dvz,
-                     dqw, dqx, dqy, dqz, dp, dq, dr])
-
-
-def rk4_step(x: np.ndarray, u: np.ndarray, dt: float,
-             d: np.ndarray = None) -> np.ndarray:
-    """
-    One RK4 integration step — backup plant simulator.
-    Remember to call normalize_quaternion() after this.
-    """
-    k1 = f_ode(x,            u, d)
-    k2 = f_ode(x + dt/2*k1,  u, d)
-    k3 = f_ode(x + dt/2*k2,  u, d)
-    k4 = f_ode(x + dt   *k3, u, d)
-    x_next = x + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
-    return normalize_quaternion(x_next)

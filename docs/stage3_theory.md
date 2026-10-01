@@ -56,9 +56,9 @@ The codebase reuses **one** dynamics builder (`_build_f_expl(s, d_fx=0, ..., d_t
 
 | Variant | Disturbance role | State dim | Used by |
 |---|---|---|---|
-| `create_model()` | $d = 0$ (nominal) | $N_x=13$ | Stages 1–2 |
+| `create_nominal_model()` | $d = 0$ (nominal) | $N_x=13$ | Stages 1–2 |
 | `create_disturbance_model()` / `create_disturbance_plant()` | $d$ = runtime parameter `model.p` | $N_x=13$, $p \in \mathbb{R}^6$ | MPC solver ($p = \hat{d}$) and plant simulator ($p = d_{\text{true}}$) |
-| `get_augmented_dynamics_casadi()` | $d$ = extra **states** | $N_z = N_x + N_d = 19$ | EKF only |
+| `get_augmented_dynamics()` | $d$ = extra **states** | $N_z = N_x + N_d = 19$ | EKF only |
 
 This separation matters: the MPC and the plant both use the *same* 13-state model with $d$ as an external parameter (so the state dimension the solver optimizes over never changes), while only the EKF needs $d$ promoted to an estimated state, since that's the only place a disturbance *estimate* is produced.
 

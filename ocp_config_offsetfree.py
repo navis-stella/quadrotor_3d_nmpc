@@ -1,12 +1,14 @@
 """
-ocp_config_offsetfree.py — Offset-Free NMPC Solver (Stage 3)
-==============================================================
+ocp_config_offsetfree.py — Stage 3–4 Offset-Free NMPC Solver
+============================================================
 Creates the acados OCP solver using the disturbance-augmented model.
+Stage 4 uses it unchanged for both estimators (EKF and MHE) — the only
+Stage 4 addition is the optional soft body-rate box (add_soft_omega_box).
 
-Key difference from Stage 2 (ocp_config_dare.py):
+Key difference from Stage 2 (ocp_config_dare.py, tag stage2):
     The prediction model includes disturbance forces/torques as runtime
-    parameters. At each MPC step, the EKF estimate d̂ is injected into
-    every shooting node, so the MPC predicts the future trajectory
+    parameters. At each MPC step, the estimate d̂ (EKF or MHE) is injected
+    into every shooting node, so the MPC predicts the future trajectory
     accounting for the estimated disturbance.
 
     This is what eliminates steady-state offset:
@@ -20,12 +22,12 @@ Architecture:
     Solver:    SQP_RTI + ERK4
 
 Runtime usage:
-    # Each MPC step:
-    d_hat = ekf.get_disturbance()    # (6,)
-    for k in range(N+1):
-        ocp_solver.set(k, 'p', d_hat)
-    ocp_solver.set(0, 'lbx', x_current)
-    ocp_solver.set(0, 'ubx', x_current)
+    # Each MPC step (z_hat from the EKF or the MHE):
+    x_s, u_s = compute_ss_target(x_ref, d_hat)     # ss_target.py
+    set_disturbance_param(ocp_solver, d_hat, N)
+    set_reference        (ocp_solver, x_s, u_s, N)
+    ocp_solver.set(0, 'lbx', x_hat)
+    ocp_solver.set(0, 'ubx', x_hat)
     ocp_solver.solve()
 """
 
@@ -37,7 +39,7 @@ from acados_template import AcadosOcp, AcadosOcpSolver
 
 from quadrotor_3d_model import (
     create_disturbance_model, get_hover_linearization,
-    f_hover, NX, NU, ND,
+    f_hover, F_MAX, NX, NU, ND,
 )
 
 
@@ -82,7 +84,7 @@ def compute_dare_terminal_cost(Q: np.ndarray,
     P_lqr[np.ix_(idx_keep, idx_keep)] = P_red
     P_lqr[6, 6] = Q[6, 6]
 
-    print('─── DARE Terminal Cost (Stage 3, Offset-Free) ─────')
+    print('─── DARE Terminal Cost (Offset-Free NMPC) ─────────')
     print(f'  Sample time Ts     = {Ts:.4f} s')
     print(f'  P_lqr diagonal     = {np.diag(P_lqr)}')
     print(f'  Ratio P/Q diag     = {np.diag(P_lqr) / np.diag(Q)}')
@@ -92,28 +94,69 @@ def compute_dare_terminal_cost(Q: np.ndarray,
 
 
 # ─────────────────────────────────────────────────────────────────
+# Optional state constraint: body-rate box (soft)
+# ─────────────────────────────────────────────────────────────────
+def add_soft_omega_box(ocp: AcadosOcp, omega_max: float,
+                       z_l1: float = 1e3, z_l2: float = 1e2):
+    """
+    |p|, |q|, |r| ≤ omega_max on nodes 1..N (node 0 is fixed by x0).
+
+    Why: the MHE's δ-IOSS certificate only holds on |ωᵢ| ≤ ω_max
+    (detectability_check.py). Without this box the MPC commands up to
+    ~5.6 rad/s in the take-off transient — the true state leaves the
+    certified set and the guarantee is void.
+
+    Soft (L1 + L2 slack penalty): the box is a performance/validity limit,
+    not a physical one, and a hard box could make the QP infeasible when
+    an estimate starts slightly outside it. z_l1 is large enough to act as
+    an exact penalty, i.e. the box holds whenever it can be held.
+    """
+    idx = np.array([10, 11, 12])
+    lb  = np.full(3, -omega_max)
+    ub  = np.full(3, +omega_max)
+    ns  = len(idx)
+
+    ocp.constraints.idxbx    = idx
+    ocp.constraints.lbx      = lb
+    ocp.constraints.ubx      = ub
+    ocp.constraints.idxsbx   = np.arange(ns)
+    ocp.cost.zl = np.full(ns, z_l1);   ocp.cost.zu = np.full(ns, z_l1)
+    ocp.cost.Zl = np.full(ns, z_l2);   ocp.cost.Zu = np.full(ns, z_l2)
+
+    ocp.constraints.idxbx_e  = idx
+    ocp.constraints.lbx_e    = lb
+    ocp.constraints.ubx_e    = ub
+    ocp.constraints.idxsbx_e = np.arange(ns)
+    ocp.cost.zl_e = np.full(ns, z_l1); ocp.cost.zu_e = np.full(ns, z_l1)
+    ocp.cost.Zl_e = np.full(ns, z_l2); ocp.cost.Zu_e = np.full(ns, z_l2)
+
+
+# ─────────────────────────────────────────────────────────────────
 # Solver Creator
 # ─────────────────────────────────────────────────────────────────
 def create_solver(x_ref:     np.ndarray,
                   N:         int   = 20,
-                  T_horizon: float = 1.0) -> AcadosOcpSolver:
+                  T_horizon: float = 1.0,
+                  omega_max: float = None) -> AcadosOcpSolver:
     """
-    Build the acados NMPC solver for offset-free control (Stage 3).
+    Build the acados NMPC solver for offset-free control.
 
     Uses create_disturbance_model() which adds model.p = [d_fx,...,d_tz].
-    The parameter p is set to the EKF estimate d̂ at runtime.
+    The parameter p is set to the estimate d̂ (EKF or MHE) at runtime.
 
     Args:
         x_ref:      reference state (13,)
         N:          prediction horizon steps
         T_horizon:  prediction horizon duration [s]
+        omega_max:  optional soft |ωᵢ| bound [rad/s] (add_soft_omega_box);
+                    None = no rate limit (the Stage 3 formulation)
 
     Cost structure (NONLINEAR_LS):
         Stage:    || [x; u] - [x_ref; u_ref] ||²_W         (17-dim)
         Terminal: || x_N - x_ref ||²_{P_lqr}                (13-dim)
 
     Constraints:
-        0 <= fi <= f_max   (box constraints on motor thrust)
+        0 <= fi <= F_MAX   (box constraints on motor thrust)
 
     Parameters:
         p = [d_fx, d_fy, d_fz, d_tx, d_ty, d_tz]  (6-dim)
@@ -158,15 +201,17 @@ def create_solver(x_ref:     np.ndarray,
     # ── Constraints ─────────────────────────────────────────────
     ocp.constraints.x0 = np.zeros(NX)
 
-    f_max = 3.0 * f_hover
     ocp.constraints.lbu   = np.zeros(NU)
-    ocp.constraints.ubu   = np.full(NU, f_max)
+    ocp.constraints.ubu   = np.full(NU, F_MAX)
     ocp.constraints.idxbu = np.arange(NU)
+
+    if omega_max is not None:
+        add_soft_omega_box(ocp, omega_max)
 
     # ── Parameter default (zero disturbance) ────────────────────
     #
     # acados needs to know the parameter dimension at compile time.
-    # Default is zero disturbance — updated at runtime from EKF.
+    # Default is zero disturbance — updated at runtime from the estimator.
     #
     ocp.parameter_values = np.zeros(ND)
 
@@ -189,14 +234,14 @@ def set_disturbance_param(ocp_solver: AcadosOcpSolver,
                           d_hat: np.ndarray,
                           N: int):
     """
-    Set the EKF disturbance estimate at every shooting node.
+    Set the disturbance estimate d̂ at every shooting node.
 
     This is called once per MPC step, before solve().
     The same d̂ is used across all nodes (constant disturbance assumption).
 
     Args:
         ocp_solver:  the acados OCP solver
-        d_hat:       (6,) estimated disturbance from EKF
+        d_hat:       (6,) estimated disturbance (EKF or MHE)
         N:           prediction horizon steps
     """
     for k in range(N + 1):   # nodes 0, 1, ..., N (including terminal)

@@ -1,14 +1,14 @@
 """
-ss_target.py — Steady-State Target Calculator for Offset-Free NMPC
-====================================================================
+ss_target.py — Stage 3–4 Steady-State Target Calculator
+=======================================================
 Computes the physically consistent equilibrium (x_s, u_s) given:
     - x_ref:  desired reference state (what the user wants)
-    - d_hat:  estimated disturbance (from EKF)
+    - d_hat:  estimated disturbance (from the EKF or the MHE)
 
 Solves:
     min_{x_s, u_s}  || p_s - p_ref ||²   (track desired position)
-    s.t.  f(x_s, u_s, d̂) = 0              (equilibrium condition)
-          u_min ≤ u_s ≤ u_max              (input limits)
+    s.t.  f(x_s, u_s, d̂) = 0             (equilibrium condition)
+          u_min ≤ u_s ≤ u_max            (input limits)
 
 For the quadrotor, the equilibrium conditions at hover-like states
 (v=0, ω=0) reduce to:
@@ -30,27 +30,13 @@ Why this matters:
 """
 
 import numpy as np
-from quadrotor_3d_model import m, g, L, c_tau, Ixx, Iyy, Izz, f_hover, NX, NU, ND
+from quadrotor_3d_model import m, g, f_hover, F_MAX, MIXER, NX, NU, quat_to_euler
 
 
 # ─────────────────────────────────────────────────────────────────
-# Motor Mixer Matrix (thrust & torques → motor forces)
+# Motor Mixer Inverse  (wrench [T, τx, τy, τz] → motor forces)
 # ─────────────────────────────────────────────────────────────────
-#
-#   [T_total]     [  1     1     1     1  ] [f1]
-#   [tau_x  ]  =  [  0    -L     0     L  ] [f2]
-#   [tau_y  ]     [ -L     0     L     0  ] [f3]
-#   [tau_z  ]     [-c_tau  c_tau -c_tau c_tau] [f4]
-#
-#   u = M_inv @ [T, tau_x, tau_y, tau_z]
-#
-_M = np.array([
-    [ 1.0,    1.0,     1.0,    1.0   ],
-    [ 0.0,   -L,       0.0,    L     ],
-    [-L,      0.0,     L,      0.0   ],
-    [-c_tau,  c_tau,  -c_tau,  c_tau  ],
-])
-_M_inv = np.linalg.inv(_M)
+_M_inv = np.linalg.inv(MIXER)          # MIXER from quadrotor_3d_model
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -100,17 +86,6 @@ def _rotmat_to_quat(R: np.ndarray) -> np.ndarray:
 
 
 # ─────────────────────────────────────────────────────────────────
-# Quaternion → Yaw extraction
-# ─────────────────────────────────────────────────────────────────
-def _quat_to_yaw(q: np.ndarray) -> float:
-    """Extract yaw angle from quaternion [qw, qx, qy, qz]."""
-    qw, qx, qy, qz = q
-    siny_cosp = 2.0 * (qw * qz + qx * qy)
-    cosy_cosp = 1.0 - 2.0 * (qy**2 + qz**2)
-    return np.arctan2(siny_cosp, cosy_cosp)
-
-
-# ─────────────────────────────────────────────────────────────────
 # Steady-State Target Calculator
 # ─────────────────────────────────────────────────────────────────
 def compute_ss_target(x_ref: np.ndarray,
@@ -144,14 +119,14 @@ def compute_ss_target(x_ref: np.ndarray,
     Args:
         x_ref:  (13,) desired reference state
         d_hat:  (6,)  estimated disturbance [d_fx, d_fy, d_fz, d_tx, d_ty, d_tz]
-        f_max:  maximum motor thrust [N] (default: 3 × f_hover)
+        f_max:  maximum motor thrust [N] (default: F_MAX = 3 × f_hover)
 
     Returns:
         x_s:  (13,) equilibrium state (p=p_ref, v=0, q=q_s, ω=0)
         u_s:  (4,)  equilibrium motor thrusts
     """
     if f_max is None:
-        f_max = 3.0 * f_hover
+        f_max = F_MAX
 
     d_fx, d_fy, d_fz = d_hat[0], d_hat[1], d_hat[2]
     d_tx, d_ty, d_tz = d_hat[3], d_hat[4], d_hat[5]
@@ -174,7 +149,7 @@ def compute_ss_target(x_ref: np.ndarray,
     #     y_b = z_b × x_c / ||...||        body y perpendicular to z_b
     #     x_b = y_b × z_b                  body x completes the frame
     #
-    psi = _quat_to_yaw(x_ref[6:10])
+    psi = quat_to_euler(x_ref[6:10])[2]
     x_c = np.array([np.cos(psi), np.sin(psi), 0.0])
 
     y_b = np.cross(z_b, x_c)
@@ -233,17 +208,9 @@ def compute_ss_target(x_ref: np.ndarray,
 # ─────────────────────────────────────────────────────────────────
 def print_ss_target(x_ref, x_s, u_s, d_hat):
     """Print a comparison of reference vs computed equilibrium."""
-    # Extract Euler angles
-    def _quat_to_euler_deg(q):
-        qw, qx, qy, qz = q
-        roll  = np.degrees(np.arctan2(2*(qw*qx + qy*qz), 1 - 2*(qx**2 + qy**2)))
-        sinp  = np.clip(2*(qw*qy - qz*qx), -1, 1)
-        pitch = np.degrees(np.arcsin(sinp))
-        yaw   = np.degrees(np.arctan2(2*(qw*qz + qx*qy), 1 - 2*(qy**2 + qz**2)))
-        return roll, pitch, yaw
 
-    r_ref = _quat_to_euler_deg(x_ref[6:10])
-    r_s   = _quat_to_euler_deg(x_s[6:10])
+    r_ref = np.degrees(quat_to_euler(x_ref[6:10]))
+    r_s   = np.degrees(quat_to_euler(x_s[6:10]))
 
     print('\n─── Steady-State Target Calculator ────────────────')
     print(f'  Disturbance d̂ = {d_hat}')

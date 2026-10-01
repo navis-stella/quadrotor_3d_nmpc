@@ -1,6 +1,6 @@
 # 3D Quadrotor NMPC
 
-Nonlinear Model Predictive Control for a 3D quadrotor, implemented in Python using the [acados](https://docs.acados.org/) solver and [CasADi](https://web.casadi.org/) symbolic framework. The project progresses through MPC stability frameworks and extensions — from basic terminal cost to quasi-infinite horizon, offset-free tracking, and beyond — applying each method to the same quadrotor plant for direct comparison.
+Nonlinear Model Predictive Control for a 3D quadrotor, implemented in Python using the [acados](https://docs.acados.org/) solver and [CasADi](https://web.casadi.org/) symbolic framework. The project progresses through MPC stability frameworks and extensions — from basic terminal cost to quasi-infinite horizon, offset-free tracking, and state estimator comparison — applying each method to the same quadrotor plant for direct comparison.
 
 ## Quadrotor Model
 
@@ -66,9 +66,10 @@ Each stage implements a distinct MPC method or extension on top of the same quad
 | `stage2` | 2.1 | **Quasi-Infinite Horizon** — $W_e = P_{\text{lyap}}$ from modified Lyapunov equation + soft terminal set $x_N \in \Omega_\alpha$. Asymptotic stability + recursive feasibility. |
 | `stage2` | 2.2 | **DARE terminal cost** — $W_e = P_{\text{lqr}}$ from reduced-order DARE ($q_w$ removed), no terminal constraint. |
 | `stage3` | 3 | **Offset-Free NMPC** — disturbance-augmented model + EKF (state+disturbance) + analytical steady-state target calculator. Eliminates steady-state offset under constant disturbances. |
-| *upcoming* | 4 | Obstacle-avoidance state constraints. |
-| *upcoming* | 5 | Time-varying reference trajectory. |
-| *upcoming* | 6 | Noisy measurements — EKF/MHE + nominal MPC. |
+| `stage4` | 4a | **Augmented EKF under partial measurement** — $y = [p; q; \omega]$; EKF estimates $[v; d]$ from model coupling. |
+| `stage4` | 4b | **Lyapunov MHE** — same augmented model and measurement; weights, decay $\lambda$ and horizon from a δ-IOSS (LMI) certificate. Both estimators run in one shared closed loop and are compared side by side. |
+| *upcoming* | 5 | Obstacle-avoidance state constraints, using the best estimator from Stage 4. |
+| *upcoming* | 6 | Time-varying reference trajectory tracking, using the best estimator from Stage 4. |
 | *upcoming* | 7 | Stochastic MPC. |
 | *upcoming* | 8 | Robust MPC. |
 
@@ -78,50 +79,56 @@ Each stage implements a distinct MPC method or extension on top of the same quad
 quadrotor_3d_nmpc/
 ├── quadrotor_3d_model.py       # Shared: CasADi dynamics (nominal + disturbance-parameterized
 │                               #         + augmented [x;d] variants), hover linearization,
-│                               #         AcadosSimSolver plant(s), quaternion utilities
-├── plot_utils.py               # Shared: plot_states, plot_inputs, plot_disturbance,
-│                               #         plot_3d_trajectory, plot_terminal_constraint
+│                               #         AcadosSimSolver plant(s), quaternion utilities,
+│                               #         measurement model h(z) for Stage 4
+├── plot_utils.py               # Shared: all figures (states, inputs, disturbance, 3D path,
+│                               #         velocity estimate, solve times, EKF-vs-MHE)
 │
-├── ocp_config_basic.py         # Stage 1   — OCP setup (W_e = Q)
-├── simulate_basic.py           # Stage 1   — closed-loop simulation
-│
-├── compute_qih_params.py       # Stage 2.1 — CARE, Lyapunov eq., terminal α, Lipschitz check
-├── ocp_config_qih.py           # Stage 2.1 — OCP setup (P_lyap + soft terminal set)
-├── simulate_qih.py             # Stage 2.1 — simulation + terminal constraint diagnostics
-│
-├── ocp_config_dare.py          # Stage 2.2 — OCP setup (W_e = P_lqr, reduced-order)
-├── simulate_dare.py            # Stage 2.2 — closed-loop simulation
-│
-├── ekf_aug.py                   # Stage 3   — AugEKF: augmented EKF (z=[x;d], RK4 predict,
-│                               #             Joseph-form update)
-├── ss_target.py                 # Stage 3   — analytical steady-state target calculator
+├── ss_target.py                # Stage 3–4 — analytical steady-state target calculator
 │                               #             (force/torque balance → x_s, u_s)
-├── ocp_config_offsetfree.py     # Stage 3   — OCP setup (disturbance model as runtime
-│                               #             parameter + DARE terminal cost)
-├── simulate_offsetfree.py       # Stage 3   — closed-loop sim: EKF + target calculator,
-│                               #             standard-vs-offset-free A/B in one run
+├── ocp_config_offsetfree.py    # Stage 3–4 — offset-free NMPC (d̂ as runtime parameter,
+│                               #             DARE terminal cost, soft |ω| box)
+│
+├── sensor_simulator.py         # Stage 4   — SensorSimulator: y=[p;q;ω] + Gaussian noise
+├── observability_check.py      # Stage 4   — (F,H) observability at hover
+├── state_est_ekf.py            # Stage 4a  — ExtendedKalmanFilter (augmented z=[x;d])
+├── detectability_check.py      # Stage 4b  — δ-IOSS certificate (LMI) → data/mhe_params.npz
+├── ocp_config_mhe.py           # Stage 4b  — acados MHE OCP + certificate I/O
+├── state_est_mhe.py            # Stage 4b  — MovingHorizonEstimator (runtime wrapper)
+├── closed_loop_sim_config.py   # Stage 4   — the ONE closed loop both estimators run in
+├── simulate_ekf.py             # Stage 4a  — entry point: closed loop with the EKF
+├── simulate_mhe.py             # Stage 4b  — entry point: closed loop with the MHE
+├── simulate_compare.py         # Stage 4   — EKF vs MHE from the saved runs (no re-simulation)
+├── data/mhe_params.npz         # Stage 4b  — verified MHE certificate (P, Q, R, λ, T_min)
 │
 ├── run.sh                      # WSL bridge launcher (Windows Git Bash → WSL2)
 ├── CLAUDE.md                   # Project guide for Claude Code
 ├── docs/
 │   ├── stage1_theory.md
 │   ├── stage2_theory.md
-│   └── stage3_theory.md        # Offset-free derivation, EKF/target-calculator logic, flow chart
-├── results/                    # Saved plots per stage (gitignored)
+│   ├── stage3_theory.md        # Offset-free derivation, EKF/target-calculator logic, flow chart
+│   ├── stage4_theory.md        # Partial measurement, observability, augmented EKF derivation,
+│   │                           #   sensor sim, closed-loop architecture, tuning rationale
+│   └── stage4.2_lyapunov_mhe.md  # Lyapunov MHE: δ-IOSS, LMI certificate, horizon bound, OCP
+├── results/                    # Saved plots per stage (tracked)
 │   ├── stage1_basic/
 │   ├── stage2.1_qih/
 │   ├── stage2.2_dare/
-│   └── stage3_offsetfree/      # states.png, inputs.png, disturbance.png
+│   ├── stage3_offsetfree/
+│   ├── stage4_ekf/             # figures + sim_data.npz
+│   ├── stage4_mhe/             # figures + sim_data.npz
+│   └── stage4_compare/         # ekf_vs_mhe.png
 └── c_generated_code/           # acados auto-generated (gitignored)
 ```
 
-All simulation scripts import from `quadrotor_3d_model.py` and `plot_utils.py`. OCP configuration is separated from the simulation loop for clarity and side-by-side method comparison.
+The `main` branch holds only the current pipeline. The scripts of earlier stages (`simulate_basic.py`, `simulate_qih.py`, `simulate_dare.py`, `simulate_offsetfree.py`, …) are preserved in the tags `stage1`, `stage2`, `stage3`. All scripts import from `quadrotor_3d_model.py` and `plot_utils.py`. OCP configuration is separated from the simulation loop for clarity and side-by-side method comparison.
 
 ## Toolchain
 
 - **acados** (Python interface, `acados_template`) — OCP solver, `SQP_RTI`, `NONLINEAR_LS` cost
 - **CasADi** 3.7.2 — symbolic dynamics and automatic differentiation
 - **NumPy** 2.x, **SciPy** — offline computations (CARE / DARE, Lyapunov equations)
+- **CVXPY** + **MOSEK** — SDP for the Stage 4b δ-IOSS certificate (only for `detectability_check.py`)
 - **WSL2 / Ubuntu** — acados C libraries and Python venv (`~/acados_env`)
 - **VS Code** on Windows for editing; execution routed through the WSL bridge
 
@@ -130,11 +137,18 @@ All simulation scripts import from `quadrotor_3d_model.py` and `plot_utils.py`. 
 Project files live on the Windows E: drive; acados runs in WSL2. The wrapper handles the hop:
 
 ```bash
-# From Windows Git Bash, in the project directory
-./run.sh simulate_basic.py
-./run.sh simulate_qih.py
-./run.sh simulate_dare.py
-./run.sh simulate_offsetfree.py
+# From Windows Git Bash, in the project directory (Stage 4, main branch)
+./run.sh simulate_ekf.py              # Stage 4a closed loop  → results/stage4_ekf/
+./run.sh simulate_mhe.py              # Stage 4b closed loop  → results/stage4_mhe/
+./run.sh simulate_compare.py          # EKF vs MHE            → results/stage4_compare/
+#   add --no-disturbance to simulate_ekf/mhe for the nominal plant
+
+# Stage 4 diagnostics
+./run.sh observability_check.py       # verify (F,H) observability at hover
+./run.sh detectability_check.py       # re-derive the MHE certificate (needs cvxpy + MOSEK)
+
+# Earlier stages: check out their tag, e.g.
+git checkout stage3 && ./run.sh simulate_offsetfree.py
 
 # Quick environment check
 ./run.sh -c "import acados_template; print('ok')"
@@ -145,7 +159,7 @@ Or, working directly inside WSL:
 ```bash
 source ~/acados_env/bin/activate
 cd /mnt/e/WorkSpace/GitHub/quadrotor_3d_nmpc
-python simulate_dare.py
+python simulate_ekf.py
 ```
 
 First solver build compiles C code (~30 s); `c_generated_code/` is regenerated on subsequent runs and is gitignored. Plots are saved under `results/<stage>/`.
@@ -159,6 +173,8 @@ First solver build compiles C code (~30 s); `c_generated_code/` is regenerated o
 **DARE terminal cost (Stage 2.2).** Terminal cost $W_e = P_{\text{lqr}}$ from a reduced-order Discrete Algebraic Riccati Equation at the hover linearization (with $q_w$ removed to keep the linearization full-rank). $P_{\text{lqr}}$ encodes the infinite-horizon LQR cost-to-go and acts as a Control Lyapunov Function, giving an asymptotic stability guarantee for sufficiently long horizons — without the added complexity of a terminal set constraint. → [derivation details](docs/stage2_theory.md#22-dare-terminal-cost-stage-22)
 
 **Offset-Free NMPC (Stage 3).** Nominal NMPC has no integral action: under a persistent disturbance (wind, mass mismatch, CoG offset) the closed loop settles at a *neighboring* equilibrium rather than the true reference, since the receding-horizon control law reacts to state error but its internal model doesn't know the disturbance exists. Stage 3 fixes this the textbook way — via an augmented disturbance model: a 6-state constant disturbance $d = [d_{f_x}, d_{f_y}, d_{f_z}, d_{\tau_x}, d_{\tau_y}, d_{\tau_z}]$ is estimated online by an EKF ($z = [x; d] \in \mathbb{R}^{19}$) and fed into the NMPC prediction model as a runtime parameter. Because the corrected model now predicts hover at level attitude as physically impossible under wind, an analytical **steady-state target calculator** solves the force/torque balance for the achievable equilibrium $(x_s, u_s)$ (tilted attitude, redistributed motor thrust) each step, and the NMPC tracks that instead of the fixed, physically-inconsistent reference. → [derivation, EKF/target-calculator logic, and flow chart](docs/stage3_theory.md)
+
+**State Estimator Comparison (Stage 4).** Stage 3 assumed the full 13-state plant was directly measured, so its EKF only had to infer the 6-dim disturbance. Stage 4 drops that assumption to the realistic case: only $y = [p; q; \omega] \in \mathbb{R}^{10}$ is measured — velocity $v$ and disturbance $d$ are *both* unmeasured and must be recovered through the model's kinematic and dynamic coupling ($v$ via $\dot p = v$, $d_f$ via $\dot v \leftarrow d_f/m$, $d_\tau$ via $\dot \omega \leftarrow d_\tau/I$). With the measurement set fixed and disturbance scenario held constant, the stage compares two estimator families under identical conditions: an augmented Extended Kalman Filter (Stage 4a) and a Lyapunov-based Moving Horizon Estimator (Stage 4b) whose weights, decay rate and horizon come from a δ-IOSS certificate verified with LMIs. Both run in one shared closed loop (`closed_loop_sim_config.py`) — the estimator is the only difference. A separate `SensorSimulator` sits between plant and estimator, injecting mocap-equivalent Gaussian noise on every channel so the estimators face a realistic signal. Observability of the linearized augmented pair $(F, H)$ at hover is verified numerically ($\text{rank}(\mathcal O) = 19$) before any estimator runs; the two smallest singular values ($\sigma \approx 5 \times 10^{-2}$) identify the horizontal force disturbances as the weakest-observable modes — a signature that will drive estimator differentiation. Sensor *fusion* (raw IMU + GPS + VIO with different rates, biases, latencies) is deliberately scoped out of this project and left to a follow-up ROS project; here the focus is estimator *design* under a fixed measurement contract. → [derivation, observability analysis, EKF math, architecture, and demonstration results](docs/stage4_theory.md)
 
 ## Stage 1 — Basic NMPC: Demonstration Results
 
@@ -195,3 +211,18 @@ After activation, total thrust settles at $T_s \approx 12.8$ N (vs. $mg = 9.81$ 
 ![State trajectory](results/stage3_offsetfree/states.png)
 
 Position converges close to the reference under standard MPC already (feedback alone limits, but doesn't eliminate, the offset); the diagnostic signal is attitude: roll/pitch settle at a non-zero tilt (~$-1.3°$/$-2.6°$) that standard MPC reaches only approximately, while after activation the state locks onto the `eq. target` (green dashed) computed by `ss_target.py` — the small transient at $t = 4$ s is the reference jumping from $(x_{\text{ref}}, u_{\text{hover}})$ to the computed $(x_s, u_s)$, after which velocity and angular rates settle exactly to zero at the tilted equilibrium.
+
+## Stage 4 — EKF vs MHE: Demonstration Results
+
+Same disturbance and reference as Stage 3, but the MPC is now fed the estimate $\hat z = [\hat x; \hat d]$ from a partial measurement stream $y = [p; q; \omega]$ with mocap-equivalent Gaussian noise on every channel. The EKF (Stage 4a) and the Lyapunov MHE (Stage 4b, $N = 60$, $T = 3$ s $> T_{\min} = 2$ s, $\lambda = 0.5$/s) run in the identical closed loop at $T_s = 0.05$ s.
+
+![EKF vs MHE](results/stage4_compare/ekf_vs_mhe.png)
+
+| Steady state (last 1 s) | EKF | MHE |
+|---|---|---|
+| position error $\lVert\Delta p\rVert$ | 11.8 mm | 10.1 mm |
+| velocity estimation error $\lVert\Delta\hat v\rVert$ | 64.7 mm/s | 13.4 mm/s |
+| force-disturbance error $\lVert\Delta\hat d_f\rVert$ | 0.165 N | 0.007 N |
+| estimator time, mean / p99 | 0.7 / 1.5 ms | 13.8 / 25.8 ms (budget 50 ms) |
+
+The two estimators sit at different points of the same bandwidth-vs-noise trade-off. The EKF converges fast but stays noisy. The MHE's certificate weights (minimal trace of $Q, R$) weight the measurements lightly against the arrival prior ($\hat d = 0$), so it converges more slowly (≈ 2 s) but is 5× more accurate in velocity and 25× in disturbance once converged. The px overshoot seen with both estimators is estimator-induced: with the true state and disturbance (oracle), the same MPC does not overshoot. Per-estimator figures are in `results/stage4_ekf/` and `results/stage4_mhe/`; derivations in [Stage 4 theory](docs/stage4_theory.md) and [Stage 4.2 Lyapunov MHE](docs/stage4.2_lyapunov_mhe.md).
