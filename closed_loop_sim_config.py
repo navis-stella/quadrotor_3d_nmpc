@@ -82,6 +82,7 @@ from plot_utils       import (
 OMEGA_MPC   = 0.9 * OMEGA_MAX       # MPC soft rate limit — margin to the certificate
 ESTIMATORS  = ('ekf', 'mhe')
 STAGE_LABEL = {'ekf': 'Stage 4a — EKF', 'mhe': 'Stage 4b — MHE'}
+SS_WINDOW   = 5.0                   # [s] steady-state window for metrics (last 5 s, t = 5–10 s)
 
 # Reference: hover at (2, 1, 3); initial state: origin, level, at rest
 X_REF = np.array([
@@ -277,10 +278,10 @@ def load_result(out_dir: str) -> dict:
 # Summary
 # ─────────────────────────────────────────────────────────────────
 def metrics(result: dict) -> dict:
-    """Steady-state errors over the last 1 s, envelope, computation time [ms]."""
+    """Steady-state errors over the last SS_WINDOW seconds, envelope, computation time [ms]."""
     X, X_hat, D_hat, D_true, Ts, x_ref = (result['X'], result['X_hat'], result['D_hat'],
                                           result['D_true'], result['Ts'], result['x_ref'])
-    n = int(1.0 / Ts)
+    n = int(round(SS_WINDOW / Ts))
     ms = lambda T: T[~np.isnan(T)] * 1e3
     return {
         'pos_err':   np.mean(np.abs(X[-n:, :3] - x_ref[:3]), axis=0),
@@ -301,17 +302,18 @@ def _time_line(name: str, T_ms: np.ndarray, budget_s: float) -> str:
 def print_summary(result: dict):
     m = metrics(result)
     name = result['name']
+    win  = f'last {SS_WINDOW:.0f} s'
 
     print('\n' + '=' * 72)
     print(f'STAGE 4 — {name} + OFFSET-FREE NMPC — CLOSED-LOOP SUMMARY')
     print('=' * 72)
-    print( '  Steady-state position error (last 1 s):')
+    print(f'  Steady-state position error ({win}):')
     for i, ax in enumerate('xyz'):
         print(f'    Δp{ax} = {m["pos_err"][i]:.4f} m')
-    print( '\n  Velocity estimation error (last 1 s):')
+    print(f'\n  Velocity estimation error ({win}):')
     for i, ax in enumerate('xyz'):
         print(f'    Δv{ax} = {m["v_err"][i]:.4f} m/s')
-    print( '\n  Disturbance estimation error (last 1 s):')
+    print(f'\n  Disturbance estimation error ({win}):')
     for i, nm in enumerate(['d_fx', 'd_fy', 'd_fz']):
         print(f'    Δ{nm} = {m["d_err"][i]:.4f} N')
     for i, nm in enumerate(['d_τx', 'd_τy', 'd_τz']):
