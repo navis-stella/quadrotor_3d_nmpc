@@ -6,7 +6,7 @@
 | Files | `state_est_ekf.py`, `sensor_simulator.py`, `observability_check.py`, `closed_loop_sim_config.py`, `simulate_ekf.py` (+ `ocp_config_offsetfree.py`, `ss_target.py` from Stage 3) |
 | Measurement | $y = [p;\, q;\, \omega] \in \mathbb{R}^{10}$ with Gaussian noise; $v$ and $d$ unmeasured |
 | Estimator | augmented EKF on $z = [x;\, d] \in \mathbb{R}^{19}$ |
-| Results | `results/stage4_ekf/` |
+| Results | `results/stage4a_ekf/` |
 
 Stage 4 has two parts that share one closed loop. This document introduces the partial
 measurement setting, the shared simulation harness, and the EKF. [Stage 4b](stage4b_mhe.md)
@@ -176,7 +176,7 @@ reached $5$ rad/s.
 ```bash
 git checkout stage4
 ./run.sh observability_check.py    # rank check at hover
-./run.sh simulate_ekf.py           # → results/stage4_ekf/   (--no-disturbance for the nominal plant)
+./run.sh simulate_ekf.py           # → results/stage4a_ekf/
 ```
 
 ## 4. Scenario
@@ -198,7 +198,7 @@ per-axis mean absolute error, as printed by `simulate_compare.py`.
 
 ### 5.1 Velocity estimation
 
-![Velocity estimate vs truth](../results/stage4_ekf/velocity_estimation.png)
+![Velocity estimate vs truth](../results/stage4a_ekf/velocity_estimation.png)
 
 Velocity is the state that must be inferred, so this is the real test of the estimator. During
 the maneuver the EKF tracks the true velocity closely, including the $5.1$ m/s peak in $v_z$.
@@ -208,7 +208,7 @@ $50$ ms step, is the main source.
 
 ### 5.2 Disturbance estimation
 
-![Disturbance estimate](../results/stage4_ekf/disturbance.png)
+![Disturbance estimate](../results/stage4a_ekf/disturbance.png)
 
 The force estimates reach the right *mean* within about $1$ s, as intended by the tuning, and
 stay unbiased (mean error below $0.01$ N per axis). Around that mean they fluctuate with a
@@ -219,7 +219,7 @@ estimates fluctuate around zero at the $10^{-3}$ N·m level.
 
 ### 5.3 States and inputs
 
-![Plant state](../results/stage4_ekf/states.png)
+![Plant state](../results/stage4a_ekf/states.png)
 
 Position reaches the reference within about $2$ s, with an overshoot of $15$ cm in $x$ at
 $t = 1.3$ s, and then holds it with an error of $10$ mm and no bias (mean offset below
@@ -229,13 +229,13 @@ Roll and pitch settle around the equilibrium tilt of Stage 3
 deviation of $1.4°$ and $2.0°$: the noisy $\hat d$ moves the target attitude, and the noisy $\hat v$
 moves the MPC's initial state.
 
-![Motor thrusts](../results/stage4_ekf/inputs.png)
+![Motor thrusts](../results/stage4a_ekf/inputs.png)
 
 The same noise is visible in the thrusts. The mean total thrust is $12.77$ N, exactly the
 equilibrium $T_s$, but each motor fluctuates with a standard deviation of about $0.35$ N, and the
 total with $0.75$ N.
 
-![3D flight path](../results/stage4_ekf/trajectory_3d.png)
+![3D flight path](../results/stage4a_ekf/trajectory_3d.png)
 
 The path is S-shaped rather than straight as in Stage 3. The vertical motion comes in two
 bursts ($v_z$ peaks at $t \approx 0.4$ s and $1.1$ s) separated by the zero-thrust braking phase,
@@ -245,7 +245,7 @@ most likely reason this differs from Stage 3.
 
 ### 5.4 Computation time
 
-![Computation time](../results/stage4_ekf/solve_time.png)
+![Computation time](../results/stage4a_ekf/solve_time.png)
 
 The EKF takes $0.69$ ms per step on average ($1.5$ ms at the 99th percentile), the MPC
 $2.0$ ms. Both are far below the $50$ ms sample time.

@@ -39,7 +39,7 @@ from collections import deque
 
 import numpy as np
 
-from quadrotor_3d_model import normalize_quaternion, f_hover, NU, NY, NZ, NW
+from quadrotor_3d_model import quat_normalize, f_hover, NU, NY, NZ, NW
 from ocp_config_mhe     import (
     export_drone_mhe_solver, load_mhe_params, pack_mhe_param,
     MHE_PARAMS_PATH, HORIZON_FACTOR,
@@ -75,7 +75,7 @@ class MovingHorizonEstimator:
             P=self.cert['P'], R=self.cert['R'], Q=self.cert['Q'],
             omega_max=self.cert['omega_max'] if omega_box else None)
 
-        z0 = normalize_quaternion(np.asarray(z0, dtype=float).copy())
+        z0 = quat_normalize(np.asarray(z0, dtype=float).copy())
         assert z0.shape == (NZ,), f'z0 shape {z0.shape}'
 
         # ── Rolling buffers (length N) ──────────────────────────

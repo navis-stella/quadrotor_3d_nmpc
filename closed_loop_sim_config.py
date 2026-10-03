@@ -55,8 +55,8 @@ Computation time:
     problems this small thread start-up costs more than it saves.
 
 Results of each run:
-    results/stage4_<ekf|mhe>[_nominal]/   figures + sim_data.npz (all arrays,
-                                          reloaded by simulate_compare.py)
+    results/stage4a_ekf/, results/stage4b_mhe/   figures + sim_data.npz (all arrays,
+                                                 reloaded by simulate_compare.py)
 """
 
 import os
@@ -66,7 +66,7 @@ import time
 import numpy as np
 
 from quadrotor_3d_model import (
-    create_disturbance_plant, normalize_quaternion, project_measurement,
+    create_disturbance_plant, quat_normalize, project_measurement,
     OMEGA_MAX, NX, NU, ND, NZ,
 )
 from ocp_config_offsetfree import create_solver, set_disturbance_param, set_reference
@@ -82,6 +82,7 @@ from plot_utils       import (
 OMEGA_MPC   = 0.9 * OMEGA_MAX       # MPC soft rate limit — margin to the certificate
 ESTIMATORS  = ('ekf', 'mhe')
 STAGE_LABEL = {'ekf': 'Stage 4a — EKF', 'mhe': 'Stage 4b — MHE'}
+STAGE_DIR   = {'ekf': 'stage4a_ekf',    'mhe': 'stage4b_mhe'}     # results/<dir>, docs/<dir>.md
 SS_WINDOW   = 5.0                   # [s] steady-state window for metrics (last 5 s, t = 5–10 s)
 
 # Reference: hover at (2, 1, 3); initial state: origin, level, at rest
@@ -130,8 +131,7 @@ def simulate(estimator:    str,
              Ts:           float = 0.05,
              T_sim:        float = 10.0,
              sensor_noise: dict  = MOCAP_NOISE_STD,
-             sensor_seed:  int   = 42,
-             disturbance:  bool  = True) -> dict:
+             sensor_seed:  int   = 42) -> dict:
     """
     Closed-loop offset-free NMPC with the chosen estimator.
 
@@ -141,7 +141,6 @@ def simulate(estimator:    str,
         Ts:               base rate of plant, sensor and estimator;
                           Ts_mpc must be an integer multiple of it
         sensor_noise:     σ dict for SensorSimulator (None = noise-free)
-        disturbance:      apply get_disturbance() to the plant (else d = 0)
 
     Returns:
         result dict with X, X_hat, D_hat, U, D_true, X_s, T_est, T_mpc,
@@ -195,7 +194,7 @@ def simulate(estimator:    str,
         # 3. Offset-free NMPC every r_mpc base steps
         if k % r_mpc == 0:
             t0 = time.perf_counter()
-            x_hat    = normalize_quaternion(z_hat[:NX].copy())   # MPC wants unit q
+            x_hat    = quat_normalize(z_hat[:NX].copy())   # MPC wants unit q
             x_s, u_s = compute_ss_target(x_ref, d_hat)
             set_disturbance_param(mpc, d_hat, N_mpc)
             set_reference        (mpc, x_s,   u_s, N_mpc)
@@ -214,13 +213,13 @@ def simulate(estimator:    str,
         X_s[k] = x_s
 
         # 4. Plant step with TRUE disturbance
-        d_true    = get_disturbance(t) if disturbance else np.zeros(ND)
+        d_true    = get_disturbance(t)
         D_true[k] = d_true
         plant.set('x', X[k])
         plant.set('u', U[k])
         plant.set('p', d_true)
         plant.solve()
-        X[k+1] = normalize_quaternion(plant.get('x'))
+        X[k+1] = quat_normalize(plant.get('x'))
 
         # Progress log (once per second)
         if k % int(round(1.0 / Ts)) == 0:
@@ -248,8 +247,8 @@ def simulate(estimator:    str,
 # ─────────────────────────────────────────────────────────────────
 # Result I/O  (sim_data.npz next to the figures of each run)
 # ─────────────────────────────────────────────────────────────────
-def results_dir(kind: str, disturbance: bool = True) -> str:
-    return f'results/stage4_{kind}' + ('' if disturbance else '_nominal')
+def results_dir(kind: str) -> str:
+    return f'results/{STAGE_DIR[kind]}'
 
 
 def save_result(result: dict, out_dir: str) -> str:
@@ -332,16 +331,9 @@ def print_summary(result: dict):
 # Entry point shared by simulate_ekf.py / simulate_mhe.py
 # ─────────────────────────────────────────────────────────────────
 def run(kind: str):
-    """Parse CLI, simulate one estimator, save data + figures, print summary."""
-    import argparse
-    parser = argparse.ArgumentParser(description=f'{STAGE_LABEL[kind]} + offset-free NMPC')
-    parser.add_argument('--no-disturbance', action='store_true',
-                        help='run the plant without the Stage 3 disturbance')
-    args = parser.parse_args()
-
-    disturbance = not args.no_disturbance
-    r     = simulate(kind, disturbance=disturbance)
-    out   = results_dir(kind, disturbance)
+    """Simulate one estimator, save data + figures, print summary."""
+    r     = simulate(kind)
+    out   = results_dir(kind)
     label = STAGE_LABEL[kind]
     x_ref = r['x_ref']
 

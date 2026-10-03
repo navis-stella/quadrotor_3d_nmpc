@@ -95,7 +95,7 @@ angles, a quaternion weight of $4 w$ matches an Euler weight $w$ (here roll/pitc
 $20$). $q_w$ is only lightly weighted because it is not independent of the vector part.
 
 The plant is an `AcadosSimSolver` on the same model. After every plant step the quaternion is
-re-normalized (`normalize_quaternion`) to prevent norm drift.
+re-normalized (`quat_normalize`) to prevent norm drift.
 
 Run it from the tag:
 

@@ -58,7 +58,7 @@ variants, so all of them share exactly the same physics:
 
 | Variant | Role of $d$ | Dimension | Used by |
 |---|---|---|---|
-| `create_model()` | $d = 0$ | $n_x = 13$ | Stages 1–2 |
+| `create_nominal_model()` | $d = 0$ | $n_x = 13$ | Stages 1–2 |
 | `create_disturbance_model()` / `create_disturbance_plant()` | runtime parameter `model.p` | $n_x = 13$, $p \in \mathbb{R}^6$ | MPC ($p = \hat d$) and plant ($p = d_{\text{true}}$) |
 | `get_augmented_dynamics_casadi()` | extra states | $n_z = 19$ | EKF only |
 

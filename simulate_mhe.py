@@ -12,9 +12,8 @@ to simulate_ekf.py — see the closed_loop_sim_config.py header for the
 scenario, rates and timing.
 
 Usage:
-    ./run.sh simulate_mhe.py                  # Stage 3 disturbance
-    ./run.sh simulate_mhe.py --no-disturbance # nominal plant
-Output: results/stage4_mhe[_nominal]/  figures + sim_data.npz (→ simulate_compare.py)
+    ./run.sh simulate_mhe.py                  # Stage 3 disturbance scenario
+Output: results/stage4b_mhe/  figures + sim_data.npz (→ simulate_compare.py)
 """
 
 from closed_loop_sim_config import run

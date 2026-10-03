@@ -4,12 +4,14 @@ quadrotor_3d_model.py — All Stages Full 3D Quadrotor Model (Quaternion)
 Single source of the physics for every stage. Contains:
   - Physical parameters, dimensions, motor mixer, operating envelope
   - Quaternion utilities                (numpy + CasADi)
-  - Disturbance model                   (MPC prediction model + plant)
+  - Nominal model                       (Stage 1–2 MPC prediction model)
+  - Disturbance model                   (Stage 3–4 MPC prediction model,
+                                          plant of every stage)
   - Augmented model z = [x; d]          (EKF: CasADi functions,
                                           MHE: acados model with process noise)
   - Measurement model y = [p; q; ω]     (sensor, EKF, MHE, observability)
-  - Hover point + linearization         (DARE terminal cost, observability)
-  - AcadosSimSolver plant
+  - Hover point + linearization         (QIH / DARE terminal cost, observability)
+  - AcadosSimSolver plant               (one plant for every stage)
 
 State (13):
     x = [px, py, pz, vx, vy, vz, qw, qx, qy, qz, p, q, r]
@@ -159,11 +161,11 @@ def quat_to_euler(q: np.ndarray) -> np.ndarray:
     return euler.squeeze() if squeeze else euler
 
 
-def normalize_quaternion(x: np.ndarray) -> np.ndarray:
+def quat_normalize(x: np.ndarray) -> np.ndarray:
     """
     Normalize the quaternion slots x[6:10] of a state (13) or augmented
-    state (19) in place. Call after each integration step to prevent drift
-    from ||q|| = 1.
+    state (19) in place and return x. Call after each integration step to
+    prevent drift from ||q|| = 1.
 
     Also enforces qw > 0 convention to avoid the double-cover ambiguity
     (q and -q represent the same rotation — we pick the qw > 0 hemisphere).
@@ -278,6 +280,30 @@ def _build_augmented():
     z = ca.vertcat(s['x'], d)
     z_dot = ca.vertcat(_build_f_expl(s, d), ca.SX.zeros(ND))
     return z, s['u'], z_dot
+
+
+# ═════════════════════════════════════════════════════════════════
+# Nominal Model  (Stage 1–2 MPC prediction model)
+# ═════════════════════════════════════════════════════════════════
+def create_nominal_model() -> AcadosModel:
+    """
+    Nominal quadrotor dynamics ẋ = f(x, u), d = 0, no parameters.
+
+    Used by the Stage 1–2 OCPs (ocp_config_basic / _qih / _dare) and by the
+    QIH Lipschitz check (compute_qih_params). Same expression as the
+    disturbance model with d = 0, so the plant of those stages is simply
+    create_disturbance_plant() with p left at zero — no model mismatch.
+    """
+    s = _build_core_symbols()
+
+    model             = AcadosModel()
+    model.name        = 'quadrotor_3d'
+    model.x           = s['x']
+    model.u           = s['u']
+    model.xdot        = ca.SX.sym('xdot', NX)
+    model.f_expl_expr = _build_f_expl(s)
+
+    return model
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -459,10 +485,13 @@ def create_disturbance_plant(Ts: float) -> AcadosSimSolver:
         plant.set('u', u_current)
         plant.set('p', d_true)          # ← set true disturbance
         plant.solve()
-        x_next = normalize_quaternion(plant.get('x'))
+        x_next = quat_normalize(plant.get('x'))
 
     The disturbance is integrated continuously within each step,
     not applied as a discrete impulse — physically correct.
+
+    Stages 1–2 never call plant.set('p', ...): p stays at its default
+    zero and this is the nominal plant of create_nominal_model().
     """
     sim = AcadosSim()
     sim.model = create_disturbance_model()

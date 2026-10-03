@@ -5,7 +5,7 @@ Creates the acados OCP solver using the disturbance-augmented model.
 Stage 4 uses it unchanged for both estimators (EKF and MHE) — the only
 Stage 4 addition is the optional soft body-rate box (add_soft_omega_box).
 
-Key difference from Stage 2 (ocp_config_dare.py, tag stage2):
+Key difference from Stage 2b (ocp_config_dare.py):
     The prediction model includes disturbance forces/torques as runtime
     parameters. At each MPC step, the estimate d̂ (EKF or MHE) is injected
     into every shooting node, so the MPC predicts the future trajectory
@@ -50,7 +50,8 @@ def compute_dare_terminal_cost(Q: np.ndarray,
                                R: np.ndarray,
                                Ts: float) -> np.ndarray:
     """
-    Compute P_lqr via reduced-order DARE (same as Stage 2).
+    Compute P_lqr via reduced-order DARE — the one implementation, also
+    the Stage 2b terminal cost (ocp_config_dare imports it from here).
 
     Removes qw (index 6), solves DARE on 12 states, embeds back.
     The disturbance does NOT enter the DARE — the terminal cost
@@ -84,7 +85,7 @@ def compute_dare_terminal_cost(Q: np.ndarray,
     P_lqr[np.ix_(idx_keep, idx_keep)] = P_red
     P_lqr[6, 6] = Q[6, 6]
 
-    print('─── DARE Terminal Cost (Offset-Free NMPC) ─────────')
+    print('─── DARE Terminal Cost (reduced-order) ────────────')
     print(f'  Sample time Ts     = {Ts:.4f} s')
     print(f'  P_lqr diagonal     = {np.diag(P_lqr)}')
     print(f'  Ratio P/Q diag     = {np.diag(P_lqr) / np.diag(Q)}')
@@ -181,7 +182,7 @@ def create_solver(x_ref:     np.ndarray,
     ocp.model.cost_y_expr   = ca.vertcat(model.x, model.u)   # (17,)
     ocp.model.cost_y_expr_e = model.x                        # (13,)
 
-    # ── Weight matrices (same as Stage 2) ───────────────────────
+    # ── Weight matrices (same as Stages 1–2) ────────────────────
     Q = np.diag([
         80.,  80.,  120.,           # px, py, pz
         10.,  10.,   15.,           # vx, vy, vz

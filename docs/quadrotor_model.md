@@ -73,7 +73,7 @@ I \dot{\omega} = \tau - \omega \times (I\omega) + d_\tau .$$
 - **Cost weights.** For small angles $\phi \approx 2 q_x$, $\theta \approx 2 q_y$, $\psi \approx 2 q_z$, so quaternion
   weights are set about $4\times$ the equivalent Euler-angle weights. $q_w$ is only lightly weighted,
   since it is not independent of the vector part.
-- **Norm drift.** The plant state passes through `normalize_quaternion(x)` after every step,
+- **Norm drift.** The plant state passes through `quat_normalize(x)` after every step,
   which also enforces the $q_w > 0$ hemisphere.
 - **Linearization.** At hover, $q_w$ is an uncontrollable marginal mode of the linearized model,
   so Riccati-based computations (CARE, DARE) use the 12-state model without $q_w$ and re-insert

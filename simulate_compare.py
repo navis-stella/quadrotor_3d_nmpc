@@ -12,9 +12,8 @@ redrawn without re-running the solvers.
 
 Usage:
     ./run.sh simulate_ekf.py && ./run.sh simulate_mhe.py
-    ./run.sh simulate_compare.py                  # compares the disturbed runs
-    ./run.sh simulate_compare.py --no-disturbance # compares the *_nominal runs
-Output: results/stage4_compare[_nominal]/ekf_vs_mhe.png
+    ./run.sh simulate_compare.py
+Output: results/stage4_compare/ekf_vs_mhe.png
 """
 
 import numpy as np
@@ -46,23 +45,15 @@ def print_comparison(results: dict):
 
 
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser(description='Stage 4 — EKF vs MHE comparison')
-    parser.add_argument('--no-disturbance', action='store_true',
-                        help='compare the runs made with --no-disturbance')
-    args = parser.parse_args()
-    disturbance = not args.no_disturbance
-
     results = {}
     for kind in ESTIMATORS:
-        r = load_result(results_dir(kind, disturbance))
+        r = load_result(results_dir(kind))
         results[r['name']] = r
 
     x_refs = [r['x_ref'] for r in results.values()]
     assert all(np.allclose(x_refs[0], x) for x in x_refs), 'runs use different references'
 
-    suffix = '' if disturbance else '_nominal'
     plot_estimator_comparison(results, x_refs[0],
                               title='Stage 4 — EKF vs MHE on the identical closed loop',
-                              save_path=f'results/stage4_compare{suffix}/ekf_vs_mhe.png')
+                              save_path='results/stage4_compare/ekf_vs_mhe.png')
     print_comparison(results)

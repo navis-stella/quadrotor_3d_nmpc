@@ -6,7 +6,7 @@
 | Files | `detectability_check.py` (offline), `ocp_config_mhe.py`, `state_est_mhe.py`, `simulate_mhe.py`, `simulate_compare.py` (+ shared loop `closed_loop_sim_config.py`) |
 | Estimator | moving horizon estimator on $z = [x;\, d] \in \mathbb{R}^{19}$, weights from an i-iIOSS (LMI) certificate |
 | Certificate | `data/mhe_params.npz` — $P$, $Q$, $R$, $\lambda$, $T_{\min}$, envelope |
-| Results | `results/stage4_mhe/`, `results/stage4_compare/` |
+| Results | `results/stage4b_mhe/`, `results/stage4_compare/` |
 
 Main references:
 J. D. Schiller, S. Muntwiler, J. Köhler, M. N. Zeilinger, M. A. Müller, *A Lyapunov function
@@ -205,7 +205,7 @@ same code.
 ```bash
 git checkout stage4
 ./run.sh detectability_check.py   # certificate → data/mhe_params.npz (needs cvxpy + MOSEK)
-./run.sh simulate_mhe.py          # → results/stage4_mhe/
+./run.sh simulate_mhe.py          # → results/stage4b_mhe/
 ./run.sh simulate_compare.py      # EKF vs MHE from the saved runs → results/stage4_compare/
 ```
 
@@ -219,7 +219,7 @@ norm of the per-axis mean absolute error, as printed by `simulate_compare.py`.
 
 ### 6.1 Velocity estimation
 
-![Velocity estimate vs truth](../results/stage4_mhe/velocity_estimation.png)
+![Velocity estimate vs truth](../results/stage4b_mhe/velocity_estimation.png)
 
 In steady state the velocity estimate is smooth and close to the truth (error
 $11$ mm/s). During the maneuver it is visibly biased: $\hat v_x$ is too small ($2.5$ vs.
@@ -231,7 +231,7 @@ is a consequence of the disturbance error, not an independent one.
 
 ### 6.2 Disturbance estimation
 
-![Disturbance estimate](../results/stage4_mhe/disturbance.png)
+![Disturbance estimate](../results/stage4b_mhe/disturbance.png)
 
 Starting from $\hat d = 0$, the force estimates approach the true values smoothly over about
 $2$ s: the error norm stays below $0.1$ N from $t = 1.95$ s and below $0.05$ N from $t = 2.35$ s.
@@ -240,23 +240,23 @@ $20\times$ less than the EKF. Torque estimates stay within $\pm 10^{-3}$ N·m.
 
 ### 6.3 States and inputs
 
-![Plant state](../results/stage4_mhe/states.png)
+![Plant state](../results/stage4b_mhe/states.png)
 
 Position settles within $2$ cm after $3.6$ s, with an $x$ overshoot of $9$ cm, and then holds the
 reference with an error of $6.8$ mm and no bias (below $3$ mm per axis). Roll and pitch settle
 at $-1.34°$ and $-2.24°$, the analytical equilibrium, with a standard deviation of only $0.35°$.
 The maximum true body rate is $1.83$ rad/s, inside the certified $2$ rad/s.
 
-![Motor thrusts](../results/stage4_mhe/inputs.png)
+![Motor thrusts](../results/stage4b_mhe/inputs.png)
 
 Thrusts settle at the equilibrium ($12.77$ N total) with a standard deviation of $0.08$ N per
 motor and $0.15$ N in total, about $4$–$5\times$ less than with the EKF.
 
-![3D flight path](../results/stage4_mhe/trajectory_3d.png)
+![3D flight path](../results/stage4b_mhe/trajectory_3d.png)
 
 ### 6.4 Computation time
 
-![Computation time](../results/stage4_mhe/solve_time.png)
+![Computation time](../results/stage4b_mhe/solve_time.png)
 
 One MHE solve takes $13.8$ ms on average ($25.8$ ms at the 99th percentile, $31.5$ ms maximum).
 It is about $20$ ms during the first $1.7$ s of large maneuvers and $12.6$ ms afterwards. MHE plus

@@ -24,7 +24,7 @@ import numpy as np
 from quadrotor_3d_model import (
     get_augmented_dynamics,
     get_measurement_function,
-    normalize_quaternion,
+    quat_normalize,
     NX, NY, NZ,
 )
 
@@ -45,7 +45,8 @@ def default_ekf_Q(Ts: float) -> np.ndarray:
                                Gives ~1 s force-disturbance tracking transient;
                                the residual jitter on d̂_fx, d̂_fy under noise
                                is the observability signature discussed in
-                               docs/stage4_theory.md §2. Lower it for smoother
+                               docs/stage4a_ekf.md §2.2 (measured
+                               jitter: §5.2). Lower it for smoother
                                estimates at the cost of slower adaptation to a
                                step change in disturbance.
         Q_c,τ = 2e-3 N²m²/s →  torque disturbances are well observable
@@ -140,7 +141,7 @@ class ExtendedKalmanFilter:
         self.P = P0 if P0 is not None else default_ekf_P0()
 
         # ── State ──────────────────────────────────────────────
-        self.z = normalize_quaternion(np.asarray(z0, dtype=float).copy())
+        self.z = quat_normalize(np.asarray(z0, dtype=float).copy())
 
         # ── Shape checks ───────────────────────────────────────
         assert self.z.shape == (NZ,),      f'z0 shape {self.z.shape}'
@@ -192,7 +193,7 @@ class ExtendedKalmanFilter:
         k2 = self._f(self.z + 0.5*self.Ts*k1,   u)
         k3 = self._f(self.z + 0.5*self.Ts*k2,   u)
         k4 = self._f(self.z +     self.Ts*k3,   u)
-        self.z = normalize_quaternion(
+        self.z = quat_normalize(
             self.z + self.Ts/6.0 * (k1 + 2*k2 + 2*k3 + k4))
 
         # Covariance propagation
@@ -223,7 +224,7 @@ class ExtendedKalmanFilter:
         K = np.linalg.solve(S.T, (self.P @ H.T).T).T
 
         # State update
-        self.z = normalize_quaternion(self.z + K @ innov)
+        self.z = quat_normalize(self.z + K @ innov)
 
         # Covariance update (Joseph)
         I_KH = np.eye(NZ) - K @ H

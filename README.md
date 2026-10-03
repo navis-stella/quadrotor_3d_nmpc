@@ -59,6 +59,16 @@ quadrotor_3d_nmpc/
 │                               #         measurement model h(z)
 ├── plot_utils.py               # Shared: all figures
 │
+├── ocp_config_basic.py         # Stage 1   — W_e = Q
+├── simulate_basic.py           # Stage 1   — entry point
+├── compute_qih_params.py       # Stage 2a  — offline CARE / Lyapunov P, α, Lipschitz check
+├── ocp_config_qih.py           # Stage 2a  — P_lyap + soft terminal set
+├── simulate_qih.py             # Stage 2a  — entry point (+ terminal-set diagnostic)
+├── ocp_config_dare.py          # Stage 2b  — P_lqr terminal cost (DARE from ocp_config_offsetfree)
+├── simulate_dare.py            # Stage 2b  — entry point
+├── ekf_aug.py                  # Stage 3   — augmented EKF, full-state measurement
+├── simulate_offsetfree.py      # Stage 3   — entry point (offset-free switched on at t = 4 s)
+│
 ├── ss_target.py                # Stage 3–4 — analytical steady-state target calculator
 ├── ocp_config_offsetfree.py    # Stage 3–4 — offset-free NMPC (d̂ as runtime parameter,
 │                               #             DARE terminal cost, soft |ω| box)
@@ -89,16 +99,18 @@ quadrotor_3d_nmpc/
 │   ├── stage2a_qih/
 │   ├── stage2b_dare/
 │   ├── stage3_offsetfree/
-│   ├── stage4_ekf/             # figures + sim_data.npz
-│   ├── stage4_mhe/             # figures + sim_data.npz
+│   ├── stage4a_ekf/             # figures + sim_data.npz
+│   ├── stage4b_mhe/             # figures + sim_data.npz
 │   └── stage4_compare/
 └── c_generated_code/           # acados generated code (gitignored)
 ```
 
-The `main` branch holds the current pipeline (Stage 4). The scripts of earlier stages
-(`simulate_basic.py`, `simulate_qih.py`, `simulate_dare.py`, `simulate_offsetfree.py`, …) are
-preserved in the tags `stage1`, `stage2` and `stage3`. OCP configuration is kept separate from
-the simulation loop, so methods can be swapped and compared side by side.
+The `main` branch holds every stage, all running on the same shared files
+(`quadrotor_3d_model.py`, `plot_utils.py`, and from Stage 2b on `ocp_config_offsetfree.py`).
+Shared files only grow backward-compatibly: new stages add functions or optional keyword
+arguments, so earlier stages keep running unchanged. The tags `stage1` … `stage4` are snapshots
+of the code as it was when each stage was finished. OCP configuration is kept separate from the
+simulation loop, so methods can be swapped and compared side by side.
 
 ## Toolchain
 
@@ -114,17 +126,20 @@ the simulation loop, so methods can be swapped and compared side by side.
 The project files live on the Windows drive; acados runs in WSL2. `run.sh` handles the hop:
 
 ```bash
-# From Windows Git Bash, in the project directory (main branch, Stage 4)
-./run.sh simulate_ekf.py              # Stage 4a closed loop  → results/stage4_ekf/
-./run.sh simulate_mhe.py              # Stage 4b closed loop  → results/stage4_mhe/
+# From Windows Git Bash, in the project directory (main branch)
+./run.sh simulate_basic.py            # Stage 1               → results/stage1_basic/
+./run.sh simulate_qih.py              # Stage 2a              → results/stage2a_qih/
+./run.sh simulate_dare.py             # Stage 2b              → results/stage2b_dare/
+./run.sh simulate_offsetfree.py       # Stage 3               → results/stage3_offsetfree/
+./run.sh simulate_ekf.py              # Stage 4a closed loop  → results/stage4a_ekf/
+./run.sh simulate_mhe.py              # Stage 4b closed loop  → results/stage4b_mhe/
 ./run.sh simulate_compare.py          # EKF vs MHE            → results/stage4_compare/
-#   add --no-disturbance to simulate_ekf/mhe for the nominal plant
 
 ./run.sh observability_check.py       # observability at hover
 ./run.sh detectability_check.py       # re-derive the MHE certificate (needs cvxpy + MOSEK)
 
-# Earlier stages: check out their tag, e.g.
-git checkout stage3 && ./run.sh simulate_offsetfree.py
+# The code as it was at the end of a stage: check out its tag, e.g.
+git checkout stage3 && ./run.sh simulate_offsetfree.py   # back with: git checkout main
 
 # Quick environment check
 ./run.sh -c "import acados_template; print('ok')"
