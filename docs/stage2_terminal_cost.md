@@ -6,7 +6,7 @@
 | Files | `compute_qih_params.py` (offline), `ocp_config_qih.py`, `simulate_qih.py` | `ocp_config_dare.py`, `simulate_dare.py` |
 | Terminal cost | $W_e = P_{\text{lyap}}$ (modified Lyapunov equation) | $W_e = P_{\text{lqr}}$ (reduced-order DARE) |
 | Terminal constraint | $x_N \in \Omega_\alpha$, softened | none |
-| Results | `results/stage2_qih/` | `results/stage2_dare/` |
+| Results | `results/stage2a_qih/` | `results/stage2b_dare/` |
 
 Main reference: H. Chen, F. Allgöwer, *A quasi-infinite horizon nonlinear model predictive
 control scheme with guaranteed stability*, Automatica, 1998.
@@ -154,8 +154,8 @@ $x_{\text{ref}}$ changes at runtime.
 
 ```bash
 git checkout stage2
-./run.sh simulate_qih.py          # → results/stage2_qih/
-./run.sh simulate_dare.py         # → results/stage2_dare/
+./run.sh simulate_qih.py          # → results/stage2a_qih/
+./run.sh simulate_dare.py         # → results/stage2b_dare/
 ```
 
 ## 4. Scenario
@@ -167,7 +167,7 @@ $T_{\text{sim}} = 5$ s, nominal plant, full state measured.
 
 ### 5.1 Stage 2a — when does the trajectory enter $\Omega_\alpha$?
 
-![QIH terminal constraint diagnostic](../results/stage2_qih/terminal-constraint_diagnostic.png)
+![QIH terminal constraint diagnostic](../results/stage2a_qih/terminal-constraint_diagnostic.png)
 
 The plot shows the predicted terminal value $V_N = \Delta x_N^\top P_{\text{lyap}}\, \Delta x_N$ against
 the bound $\alpha \approx 10^{-4}$ on a log scale.

@@ -104,7 +104,7 @@ each property symbolically before solving:
 | Variable | Enters $A$? | Set used |
 |---|---|---|
 | $p$, $v$, $d$, $w$ | no | unbounded |
-| $q$ | yes, affinely | ball $\|q\| \le r_{\max} = 1.02$ (the unit sphere is not convex; the ball is its convex hull, with margin for norm drift of the estimate) |
+| $q$ | yes, affinely | ball $\Vert q\Vert \le r_{\max} = 1.02$ (the unit sphere is not convex; the ball is its convex hull, with margin for norm drift of the estimate) |
 | $\omega$ | yes, affinely | box $\lvert\omega_i\rvert \le \omega_{\max} = 2$ rad/s |
 | $u$ | only through $T_{\text{total}} = \sum f_i$, affinely | $T_{\text{total}} \in [0,\, 4 f_{\max}] = [0,\, 29.4]$ N |
 
@@ -161,7 +161,7 @@ $T_s = 0.05$ s. The minimum allowed is $N_{\min} = 41$ (strict $T > 2$ s). The g
 $\rho = 4^{1/3} \cdot 0.5 = 0.794$ per second. The MHE window is independent of the 1 s MPC horizon.
 
 **Cost on the grid.** Every stage $i$ carries its age $\tau_i = (N - i) T_s$ and uses one expression,
-the integrand of [§2.2](stage2_terminal_cost.md#22-stage-2b--dare-terminal-cost):
+the integrand of §2.2:
 
 $$\ell_i = a_i \frac{2\,\lambda^{\tau_i}}{T_s} \|e_z\|_P^2 + 2\,\lambda^{\tau_i} \|w_i\|_Q^2 + m_i\, \lambda^{\tau_i} \|e_{y,i}\|_R^2 .$$
 
@@ -269,17 +269,17 @@ $1.6$ ms. All SQP_RTI calls succeeded.
 
 | Steady state ($t = 5$–$10$ s) | EKF | MHE | Ratio |
 |---|---|---|---|
-| position error $\|\Delta p\|$ | $10.1$ mm | $6.8$ mm | $1.5\times$ |
-| velocity estimation error $\|\Delta \hat v\|$ | $53.2$ mm/s | $11.0$ mm/s | $4.8\times$ |
-| force-disturbance error $\|\Delta \hat d_f\|$ | $0.138$ N | $0.0078$ N | $18\times$ |
+| position error $\Vert \Delta p\Vert$ | $10.1$ mm | $6.8$ mm | $1.5\times$ |
+| velocity estimation error $\Vert \Delta \hat v\Vert$ | $53.2$ mm/s | $11.0$ mm/s | $4.8\times$ |
+| force-disturbance error $\Vert \Delta \hat d_f\Vert$ | $0.138$ N | $0.0078$ N | $18\times$ |
 | roll / pitch standard deviation | $1.4°$ / $2.0°$ | $0.35°$ / $0.37°$ | $4$–$5\times$ |
 | total thrust standard deviation | $0.75$ N | $0.15$ N | $5\times$ |
 
 | Transient and cost | EKF | MHE |
 |---|---|---|
 | $\hat d_f$ mean converged | $\approx 1$ s | $\approx 2$ s |
-| $\|\hat d_f - d_f\| < 0.1$ N from | not reached (noise band $\approx 0.1$–$0.3$ N) | $1.95$ s |
-| $\|p - p_{\text{ref}}\| < 5$ cm / $< 2$ cm from | $1.9$ s / $4.0$ s | $2.75$ s / $3.6$ s |
+| $\Vert \hat d_f - d_f\Vert < 0.1$ N from | not reached (noise band $\approx 0.1$–$0.3$ N) | $1.95$ s |
+| $\Vert p - p_{\text{ref}}\Vert < 5$ cm / $< 2$ cm from | $1.9$ s / $4.0$ s | $2.75$ s / $3.6$ s |
 | $p_x$ overshoot | $15$ cm | $9$ cm |
 | estimator time, mean / p99 | $0.69$ / $1.5$ ms | $13.8$ / $25.8$ ms |
 
@@ -287,7 +287,7 @@ $1.6$ ms. All SQP_RTI calls succeeded.
 trade-off. The EKF reacts within one sample and gets the disturbance mean right in about 1 s,
 but its one-step correction passes position noise straight into $\hat v$ and $\hat d$. The MHE
 fits a 3 s window of measurements to the nonlinear model; this averages the noise away and
-gives a $5–20\times$ more accurate estimate once converged, but it needs about 2 s to move $\hat d$
+gives a 5–20$\times$ more accurate estimate once converged, but it needs about 2 s to move $\hat d$
 away from the zero prior. The MHE also starts with a one-sample information disadvantage
 (prediction form) and still wins in steady state.
 
@@ -308,7 +308,7 @@ also not tested yet.
 - **Quaternion metric.** The certificate bounds $\|z - \tilde z\|_P^2$ with a Euclidean difference in
   $q$; the MHE cost uses the multiplicative error $\lvert q \otimes q_r^{-1}\rvert - [1,0,0,0]$. For small
   errors the two agree up to a factor, but the cost is not literally the certified function.
-- **Exact optimizer vs. RTI.** The stability result of [§2.2](stage2_terminal_cost.md#22-stage-2b--dare-terminal-cost) applies to the optimal MHE solution; `SQP_RTI` performs
+- **Exact optimizer vs. RTI.** The stability result of §2.2 applies to the optimal MHE solution; `SQP_RTI` performs
   one iteration per sample. All solves succeeded, but optimality is not checked.
 - **Continuous-time certificate, discrete implementation.** The cost integral is a left Riemann
   sum on the $T_s$ grid and the model an RK4 step. Both approximations shrink with $T_s$; the

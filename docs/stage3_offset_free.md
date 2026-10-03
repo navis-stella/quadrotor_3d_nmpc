@@ -171,7 +171,7 @@ Per step $k$, in the order of `simulate_offsetfree.py`:
 1. **Measure** $y = x_k$ (full state).
 2. **EKF update**$(y)$ → $\hat x$, $\hat d$. Runs from $t = 0$, also while offset-free is off.
 3. **Switch** at $T_{\text{activate}}$:
-   - $t \ge T_{\text{activate}}$: $(x_s, u_s) = $ `compute_ss_target`$(x_{\text{ref}}, \hat d)$, $p = \hat d$, reference $(x_s, u_s)$ → **offset-free ON**.
+   - $t \ge T_{\text{activate}}$: $(x_s, u_s) =$ `compute_ss_target`$(x_{\text{ref}}, \hat d)$, $p = \hat d$, reference $(x_s, u_s)$ → **offset-free ON**.
    - $t < T_{\text{activate}}$: $p = 0$, reference $(x_{\text{ref}}, u_{\text{hover}})$ → **standard MPC** (Stage 2b baseline).
 4. **Solve** the OCP (`SQP_RTI`) with $x_0 = x_k$ (the measured state; $\hat x$ is not needed
    under full measurement).
@@ -204,7 +204,7 @@ flowchart TD
 | Terminal cost | $W_e = P_{\text{lqr}}$, reduced-order DARE |
 | Parameters | `model.p` $= d \in \mathbb{R}^6$, default $0$ |
 | Horizon, solver | $N = 20$, $T = 1$ s, $T_s = 0.05$ s, `SQP_RTI`, ERK4, Gauss-Newton, HPIPM |
-| EKF | RK4 prediction, $F_d = I + F_c T_s$, Joseph update, tuning as in [§2.2](stage2_terminal_cost.md#22-stage-2b--dare-terminal-cost) |
+| EKF | RK4 prediction, $F_d = I + F_c T_s$, Joseph update, tuning as in §2.2 |
 | Target calculator | closed form, motor clipping with warning |
 | Activation | $T_{\text{activate}} = 4$ s |
 

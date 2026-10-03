@@ -151,8 +151,8 @@ flowchart LR
 Per step $k$:
 
 1. $y_k = h(x_k) + \nu_k$.
-2. $\hat z_k = $ `estimator.step`$(y_k, u_{k-1})$ — the common interface of EKF and MHE.
-3. $(x_s, u_s) = $ `compute_ss_target`$(x_{\text{ref}}, \hat d_k)$; the NMPC gets $\hat d_k$ as parameter,
+2. $\hat z_k =$ `estimator.step`$(y_k, u_{k-1})$ — the common interface of EKF and MHE.
+3. $(x_s, u_s) =$ `compute_ss_target`$(x_{\text{ref}}, \hat d_k)$; the NMPC gets $\hat d_k$ as parameter,
    $(x_s, u_s)$ as reference and the normalized **estimate** $\hat x_k$ as initial state.
 4. The plant advances with the true disturbance.
 
