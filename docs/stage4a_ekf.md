@@ -160,6 +160,19 @@ flowchart LR
     M -->|u_k| E
 ```
 
+```mermaid
+flowchart LR
+    P["Plant<br/>true x, d_true"] -->|"x_k"| S["Sensor<br/>y = (p, q, ω) + noise"]
+    S -->|"y_k"| E["Estimator<br/>EKF or MHE"]
+    E -->|"x_hat_k, d_hat_k"| T["Target calculator<br/>x_s, u_s under d_hat_k"]
+    T --> M["Offset-free NMPC<br/>x0 = x_hat_k, p = d_hat_k"]
+    M -->|"u_k"| P
+    M -->|"u_k"| E
+```
+
+where $\hat{x}_k,\ \hat{d}_k$ are the estimator outputs, $x_0=\hat{x}_k$ is the initial state of the OCP, $p=\hat{d}_k$ is the disturbance parameter at all nodes, and $x_s,u_s$ come from the steady-state target for $\hat{d}_k$.
+
+
 Per step $k$:
 
 1. $y_k = h(x_k) + \nu_k$.
