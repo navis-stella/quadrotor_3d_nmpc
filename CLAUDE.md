@@ -15,6 +15,7 @@
   ./run.sh -c "import acados_template; print('ok')"
   ```
   `run.sh` (Windows) → `wsl.exe -e bash /home/celestialnavis/acados_run.sh` (WSL-side launcher).
+- Plot windows (`plot_utils._show`): figures are saved immediately and never block; all windows open together at the end of the run (close them to exit). `QUAD_PLOTS=none ./run.sh <script>` = save only, no windows (`run.sh` forwards `QUAD_PLOTS` into WSL via `WSLENV`).
 - Editing files: do it directly on the E: path — same bytes WSL sees via `/mnt/e`.
 - First solver build compiles C code (~30 s); `c_generated_code/` is regenerated and gitignored.
 - acados is built with OpenMP: set `OMP_NUM_THREADS=1` for these small problems (`closed_loop_sim_config.py` does) — otherwise thread overhead dominates the solve times.
@@ -25,7 +26,7 @@ The main branch holds **every stage**, all on the same shared files (`quadrotor_
 
 | File | Role |
 |---|---|
-| `quadrotor_3d_model.py` | Single source of the physics. Params, dims (`NX=13`, `NU=4`, `ND=6`, `NZ=19`, `NY=10`, `NW=NZ`), `IDX_Y`, `MIXER`, envelope `F_MAX`, `OMEGA_MAX`. Quaternion utils (`quat_to_euler`, `quat_normalize`, CasADi `quat_error_casadi`). Models: `create_disturbance_model` (MPC + plant, `p = d`), `get_augmented_dynamics` (EKF), `create_mhe_model` (MHE: same augmented ODE + process noise `w` as `model.u`, rotor thrusts as `model.p`). `create_nominal_model` (d = 0: Stages 1–2 OCPs, QIH check). Measurement: `measurement_expr`, `get_measurement_function`, `project_measurement` (common prior z̄₀). `hover_point`, `get_hover_linearization` (CasADi Jacobian), `create_disturbance_plant(Ts)`. |
+| `quadrotor_3d_model.py` | Single source of the physics. Params, dims (`NX=13`, `NU=4`, `ND=6`, `NZ=19`, `NY=10`, `NW=NZ`), `IDX_Y`, `MIXER`, envelope `F_MAX`, `OMEGA_MAX`. Quaternion utils (`quat_to_euler`, `quat_normalize`, CasADi `quat_error_casadi`). Models: `create_disturbance_model` (MPC + plant, `p = d`), `get_augmented_dynamics` (EKF), `create_mhe_model` (MHE: same augmented ODE + process noise `w` as `model.u`, rotor thrusts as `model.p`). `create_nominal_model` (d = 0: Stages 1–2 OCPs, QIH check). Stage 5: `steady_state_map` g(p_a) (NumPy or CasADi input), `create_tracking_model`, `NA`, `NXA`, `IDX_TERM_EQ`. Measurement: `measurement_expr`, `get_measurement_function`, `project_measurement` (common prior z̄₀). `hover_point`, `get_hover_linearization` (CasADi Jacobian), `create_disturbance_plant(Ts)`. |
 | `ocp_config_basic.py` | **Stage 1** — NMPC on `create_nominal_model()`, `W_e = Q`, input box `F_MAX`. |
 | `simulate_basic.py` | **Stage 1** — entry point; plant = `create_disturbance_plant(Ts)` with p = 0. Output `results/stage1_basic/`. |
 | `compute_qih_params.py` | **Stage 2a** — offline CARE gain, modified-Lyapunov `P`, κ, α (input limit + seeded Monte Carlo Lipschitz check → reproducible α). |
@@ -47,7 +48,9 @@ The main branch holds **every stage**, all on the same shared files (`quadrotor_
 | `simulate_ekf.py` | **Stage 4a** — entry point: `closed_loop_sim_config.run('ekf')`. Output `results/stage4a_ekf/` (figures + `sim_data.npz`). |
 | `simulate_mhe.py` | **Stage 4b** — entry point: `closed_loop_sim_config.run('mhe')`; needs `data/mhe_params.npz`. Output `results/stage4b_mhe/` (figures + `sim_data.npz`). |
 | `simulate_compare.py` | **Stage 4** — loads both `sim_data.npz` (no simulation) → `results/stage4_compare/ekf_vs_mhe.png` + metrics table. |
-| `plot_utils.py` | All figures: `plot_states`, `plot_inputs`, `plot_3d_trajectory`, `plot_terminal_constraint` (2a), `plot_disturbance`, `plot_velocity_estimation`, `plot_solve_times`, `plot_estimator_comparison`. Each ensures its save-path directory exists. |
+| `ocp_config_tracking.py` | **Stage 5** — tracking MPC with artificial reference (Limon et al., IEEE TAC 2018): x̃ = [x; p_a] with ṗ_a = 0 (`create_tracking_model`), stage cost on x − x_a(p_a), offset cost ‖p_a − r‖²_T as terminal cost (r = parameter, never in a constraint), terminal equality x_N = x_a on `IDX_TERM_EQ` (qw left out, LICQ), room box `ROOM_LB/UB` (part of Z), Y_s = room shrunk by `MARGIN`. `optimal_reachable_reference` = y_r* (clip onto Y_s, diagonal T). |
+| `simulate_tracking.py` | **Stage 5** — entry point: piecewise-constant reference sequence incl. a target outside the room, nominal plant. Output `results/stage5_tracking/`. |
+| `plot_utils.py` | All figures: `plot_states`, `plot_inputs`, `plot_3d_trajectory`, `plot_terminal_constraint` (2a), `plot_disturbance`, `plot_velocity_estimation`, `plot_solve_times`, `plot_estimator_comparison`, `plot_artificial_reference` (5). Each ensures its save-path directory exists. |
 
 ## Model conventions
 
@@ -70,13 +73,14 @@ The main branch holds **every stage**, all on the same shared files (`quadrotor_
 5. **Stage 4:** partial, noisy measurement `y = [p; q; ω]` → estimate z = [x; d]; same offset-free NMPC.
    - **4a:** augmented EKF.
    - **4b:** augmented Lyapunov MHE with δ-IOSS certificate (λ → LMI → T_min → N).
-6. **Stage 5:** obstacle-avoidance state constraints.
-7. **Stage 6:** time-varying reference trajectory.
-8. **Stage 7:** stochastic MPC.
+6. **Stage 5:** tracking MPC with artificial reference (piecewise-constant references, room walls as state constraints).
+7. **Stage 6:** time-varying reference trajectory tracking.
+8. **Stage 7:** obstacle avoidance.
 9. **Stage 8:** robust MPC.
+10. **Stage 9:** stochastic MPC.
 
 ## Conventions
 
 - Keep the existing house style: box-drawing section headers, aligned assignments, docstrings that explain the *why*.
-- File headers: `name.py — <Stage> Title` with `<Stage>` = `All Stages`, `Stage 1`, `Stage 2a` (QIH), `Stage 2b` (DARE), `Stage 3`, `Stage 3–4`, `Stage 4`, `Stage 4a` (EKF) or `Stage 4b` (MHE), a `===` underline of the same length, then what/why.
-- Don't commit `c_generated_code/`, `*.json` (gitignored). `results/<stage>/` figures are tracked on purpose (README).
+- File headers: `name.py — <Stage> Title` with `<Stage>` = `All Stages`, `Stage 1`, `Stage 2a` (QIH), `Stage 2b` (DARE), `Stage 3`, `Stage 3–4`, `Stage 4`, `Stage 4a` (EKF), `Stage 4b` (MHE) or `Stage 5` (tracking), no colon after it, a `===` underline of the same length, then what/why.
+- Don't commit `c_generated_code*/`, `*.json` (gitignored). `results/<stage>/` figures are tracked on purpose (README).

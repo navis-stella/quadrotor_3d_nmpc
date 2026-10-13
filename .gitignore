@@ -1,4 +1,4 @@
-c_generated_code/
+c_generated_code*/
 __pycache__/
 *.pyc
 *.json

@@ -54,7 +54,7 @@ along the *nonlinear* dynamics $\dot x = f(x, Kx)$. Then $F$ upper-bounds the in
 cost of the tail, $\Omega_\alpha$ is positively invariant, and the standard argument gives
 asymptotic stability and recursive feasibility.
 
-**Design procedure** (lecture → `compute_qih_params.py`):
+**Design procedure** (Chen & Allgöwer, 1998 → `compute_qih_params.py`):
 
 **Step 0 — Remove $q_w$.** At hover, the linearized $\dot q_w = -\tfrac12(q_x p + q_y q + q_z r)$
 has zero row in both $A$ and $B$: $q_w$ is a marginal ($\lambda = 0$), uncontrollable mode, so

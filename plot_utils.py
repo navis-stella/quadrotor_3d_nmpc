@@ -10,15 +10,25 @@ titles and paths.
     plot_velocity_estimation                         v̂ vs v        (Stage 4)
     plot_solve_times                                 estimator vs MPC compute time
     plot_estimator_comparison                        EKF vs MHE     (Stage 4)
+    plot_artificial_reference                        p, p_a*, r     (Stage 5)
 
 All functions require explicit title and save_path — no stage-specific
 defaults here, so each simulation script controls its own labeling.
 Stage-specific extras are optional keyword arguments that default to None
 (e.g. Stage 3's X_s / t_switch), so callers that omit them are unaffected.
+
+Display (env var QUAD_PLOTS, read at each plot):
+    show  (default)  every figure is saved at once and stays open WITHOUT
+                     blocking; one plt.show() at interpreter exit opens all
+                     windows together — the run is never held up by a window
+    none             save only, each figure is closed (batch runs); also the
+                     behavior on a non-interactive backend such as Agg
 """
 
 import os
+import atexit
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 
 from quadrotor_3d_model import quat_to_euler, f_hover, NU
@@ -29,6 +39,36 @@ def _ensure_dir(save_path: str) -> None:
     d = os.path.dirname(save_path)
     if d:
         os.makedirs(d, exist_ok=True)
+
+
+_NON_INTERACTIVE = {'agg', 'pdf', 'ps', 'svg', 'cairo', 'pgf', 'template'}
+_show_at_exit    = False
+
+
+def _show() -> None:
+    """
+    Hand the just-saved current figure to the display policy (QUAD_PLOTS).
+    A blocking plt.show() per figure would stall the run until each window
+    is closed; instead the figure stays open and _show_all, registered once
+    with atexit, shows every open figure in a single blocking call.
+    """
+    global _show_at_exit
+    mode = os.environ.get('QUAD_PLOTS', 'show').lower()
+    if mode == 'none' or matplotlib.get_backend().lower() in _NON_INTERACTIVE:
+        plt.close(plt.gcf())
+        return
+    if not _show_at_exit:
+        # registered after pyplot's own atexit cleanup → runs before it (LIFO)
+        atexit.register(_show_all)
+        _show_at_exit = True
+
+
+def _show_all() -> None:
+    """Open all figures together; returns when the last window is closed."""
+    if plt.get_fignums():
+        print(f'\n{len(plt.get_fignums())} figure window(s) open — '
+              'close them to exit (QUAD_PLOTS=none: save only).')
+        plt.show()
 
 
 def _mark_switch(ax, t_switch: float, label: str) -> None:
@@ -134,7 +174,7 @@ def plot_states(X:            np.ndarray,
     plt.tight_layout()
     _ensure_dir(save_path)
     plt.savefig(save_path, dpi=150)
-    plt.show()
+    _show()
     print(f'Plot saved: {save_path}')
 
 
@@ -190,7 +230,7 @@ def plot_inputs(U:            np.ndarray,
     plt.tight_layout()
     _ensure_dir(save_path)
     plt.savefig(save_path, dpi=150)
-    plt.show()
+    _show()
     print(f'Plot saved: {save_path}')
 
 
@@ -218,7 +258,7 @@ def plot_3d_trajectory(X:         np.ndarray,
     plt.tight_layout()
     _ensure_dir(save_path)
     plt.savefig(save_path, dpi=150)
-    plt.show()
+    _show()
     print(f'Plot saved: {save_path}')
 
 
@@ -289,7 +329,7 @@ def plot_terminal_constraint(X_N:       np.ndarray,
     plt.tight_layout()
     _ensure_dir(save_path)
     plt.savefig(save_path, dpi=150)
-    plt.show()
+    _show()
     print(f'Plot saved: {save_path}')
 
 
@@ -344,7 +384,7 @@ def plot_disturbance(D_hat:        np.ndarray,
     plt.tight_layout()
     _ensure_dir(save_path)
     plt.savefig(save_path, dpi=150)
-    plt.show()
+    _show()
     print(f'Plot saved: {save_path}')
 
 
@@ -382,7 +422,7 @@ def plot_velocity_estimation(X:         np.ndarray,
     plt.tight_layout()
     _ensure_dir(save_path)
     plt.savefig(save_path, dpi=150)
-    plt.show()
+    _show()
     print(f'Plot saved: {save_path}')
 
 
@@ -440,7 +480,7 @@ def plot_solve_times(T_est:     np.ndarray,
     plt.tight_layout()
     _ensure_dir(save_path)
     plt.savefig(save_path, dpi=150)
-    plt.show()
+    _show()
     print(f'Plot saved: {save_path}')
 
 
@@ -487,5 +527,61 @@ def plot_estimator_comparison(results:   dict,
     plt.tight_layout()
     _ensure_dir(save_path)
     plt.savefig(save_path, dpi=150)
-    plt.show()
+    _show()
+    print(f'Plot saved: {save_path}')
+
+
+# ─────────────────────────────────────────────────────────────────
+# Artificial Reference  (Stage 5 — tracking MPC)
+# ─────────────────────────────────────────────────────────────────
+def plot_artificial_reference(X:         np.ndarray,
+                              P_a:       np.ndarray,
+                              R:         np.ndarray,
+                              R_star:    np.ndarray,
+                              Ts:        float,
+                              y_lb:      np.ndarray,
+                              y_ub:      np.ndarray,
+                              title:     str,
+                              save_path: str):
+    """
+    The key Stage 5 figure: how the artificial reference p_a* moves.
+
+    X       (n+1, ≥13)  closed-loop states (position = X[:, :3])
+    P_a     (n, 3)      optimal artificial reference p_a*(t) per MPC call
+    R       (n, 3)      external reference r(t)
+    R_star  (n, 3)      optimal reachable reference y_r*(t) = argmin_{Y_s} V_o
+    y_lb/ub (3,)        bounds of Y_s (shaded outside)
+
+    Expected (convergence to the optimal reachable steady state, Limon et
+    al., IEEE TAC 2018): p_a* slides from p toward r and settles at y_r*;
+    p follows p_a*. If r ∉ Y_s, p_a* stops at the boundary of Y_s.
+    """
+    t_x = np.arange(X.shape[0]) * Ts
+    t_k = np.arange(P_a.shape[0]) * Ts
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.5))
+    fig.suptitle(title, fontsize=14)
+    labels = ['x [m]', 'y [m]', 'z [m]']
+
+    for i in range(3):
+        ax = axes[i]
+        ax.step(t_k, R[:, i],      'r--', where='post', lw=1.3, label='r (reference)')
+        ax.step(t_k, R_star[:, i], 'k:',  where='post', lw=1.5, label='y_r* (best reachable)')
+        ax.plot(t_k, P_a[:, i],    'g',   lw=1.5, label='p_a* (artificial)')
+        ax.plot(t_x, X[:, i],      'b',   lw=1.2, label='p (state)')
+        lo, hi = ax.get_ylim()
+        if y_ub[i] < hi:                          # shade only bounds in view
+            ax.axhspan(y_ub[i], hi, color='gray', alpha=0.12, label='outside Y_s')
+        if y_lb[i] > lo:
+            ax.axhspan(lo, y_lb[i], color='gray', alpha=0.12)
+        ax.set_ylim(lo, hi)
+        ax.set_ylabel(labels[i])
+        ax.set_xlabel('t [s]')
+        ax.grid(True, alpha=0.3)
+    axes[0].legend(fontsize=7, loc='lower right')
+
+    plt.tight_layout()
+    _ensure_dir(save_path)
+    plt.savefig(save_path, dpi=150)
+    _show()
     print(f'Plot saved: {save_path}')
