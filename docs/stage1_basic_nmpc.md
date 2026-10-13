@@ -23,24 +23,28 @@ The textbook route to a provably stable MPC scheme is the zero-terminal-constrai
 At each time $t$, given the measured state $x(t)$ (written in error coordinates, so the
 reference is the origin), solve
 
-$$\min_{\bar{u}(\cdot;t)} \; J\bigl(x(t),\, \bar{u}(\cdot;t)\bigr) = \int_{t}^{t+T} L\bigl(\bar{x}(\tau;t),\, \bar{u}(\tau;t)\bigr)\, d\tau$$
+```math
+\min_{\bar{u}(\cdot;t)} \; J\bigl(x(t),\, \bar{u}(\cdot;t)\bigr) = \int_{t}^{t+T} L\bigl(\bar{x}(\tau;t),\, \bar{u}(\tau;t)\bigr)\, d\tau
+```
 
 subject to
 
-$$\begin{aligned}
-\dot{\bar{x}} &= f(\bar{x},\, \bar{u}) && \text{(system dynamics)} \\
-\bar{x}(t;\,t) &= x(t) && \text{(initial condition)} \\
-\bar{u}(\tau;\,t) &\in \mathcal{U}, \quad \bar{x}(\tau;\,t) \in \mathcal{X} && \forall\,\tau \in [t,\, t+T] \\
-\bar{x}(t+T;\,t) &= 0 && \text{(zero-terminal constraint)}
-\end{aligned}$$
+```math
+\begin{aligned}
+\dot{\bar{x}} &= f(\bar{x},\, \bar{u}) && \text{(system dynamics)}
+\\ \bar{x}(t;\,t) &= x(t) && \text{(initial condition)}
+\\ \bar{u}(\tau;\,t) &\in \mathcal{U}, \quad \bar{x}(\tau;\,t) \in \mathcal{X} && \forall\,\tau \in [t,\, t+T]
+\\ \bar{x}(t+T;\,t) &= 0 && \text{(zero-terminal constraint)}
+\end{aligned}
+```
 
 Forcing the predicted terminal state exactly onto the origin makes the cost-to-go beyond
-$t+T$ exactly zero. The optimal value $J^*(x)$ then serves as a Lyapunov function that strictly
+$t+T$ exactly zero. The optimal value $`J^*(x)`$ then serves as a Lyapunov function that strictly
 decreases along the closed loop, which gives asymptotic stability.
 
 ### 2.2 Why it is too tight
 
-The equality $\bar{x}(t+T;\,t) = 0$ is a hard constraint on all 13 terminal states. The solver
+The equality $`\bar{x}(t+T;\,t) = 0`$ is a hard constraint on all 13 terminal states. The solver
 must find admissible motor thrusts that steer the full nonlinear model *exactly* to the
 reference within $T$ seconds. With box-constrained thrusts and the short horizons needed for
 real-time `SQP_RTI`, the feasible set shrinks to a small neighborhood of hover. Larger
@@ -53,13 +57,15 @@ unacceptable for an online controller. This motivates relaxing the constraint in
 Stage 1 drops the terminal constraint and penalizes the terminal state with the stage-cost
 weight:
 
-$$J\bigl(x(t),\, \bar{u}(\cdot;t)\bigr) = \int_{t}^{t+T} L(\bar{x},\, \bar{u})\, d\tau \;+\; \bar{x}(t+T;\,t)^\top Q\, \bar{x}(t+T;\,t)$$
+```math
+J\bigl(x(t),\, \bar{u}(\cdot;t)\bigr) = \int_{t}^{t+T} L(\bar{x},\, \bar{u})\, d\tau \;+\; \bar{x}(t+T;\,t)^\top Q\, \bar{x}(t+T;\,t)
+```
 
-with no constraint on $\bar{x}(t+T;\,t)$ beyond the regular bounds.
+with no constraint on $`\bar{x}(t+T;\,t)`$ beyond the regular bounds.
 
 **What this gives up.** $Q$ is chosen for tracking performance, not derived from the plant, so
 $\bar{x}^\top Q \bar{x}$ is not a certified control Lyapunov function. No argument in this
-formulation proves that $J^*$ decreases along the closed loop, and nothing tells us *how long*
+formulation proves that $`J^*`$ decreases along the closed loop, and nothing tells us *how long*
 the horizon must be for the closed loop to be stable.
 
 **What it keeps.** In the nominal case the reference is a true equilibrium of the plant
@@ -82,7 +88,7 @@ state bounds, so the OCP stays feasible even for large setpoint changes.
 |---|---|
 | Model | 13 states $[p, v, q, \omega]$, 4 inputs $[f_1 \dots f_4]$, see [README](../README.md#quadrotor-model) |
 | Integrator | ERK4 (acados) |
-| Cost | `NONLINEAR_LS`, $y = [x;\,u]$, $W = \mathrm{blkdiag}(Q, R)$, $y_{\text{ref}} = [x_{\text{ref}};\, u_{\text{hover}}]$ |
+| Cost | `NONLINEAR_LS`, $`y = [x;\,u]`$, $W = \mathrm{blkdiag}(Q, R)$, $`y_{\text{ref}} = [x_{\text{ref}};\, u_{\text{hover}}]`$ |
 | Terminal cost | $W_e = Q$, $y_e = x$ |
 | Input bounds | $0 \le f_i \le f_{\max} = 3 f_{\text{hover}} \approx 7.35$ N |
 | Solver | `SQP_RTI` (one QP per sample), Gauss-Newton Hessian, `PARTIAL_CONDENSING_HPIPM` |
@@ -106,7 +112,7 @@ git checkout stage1
 
 ## 4. Scenario
 
-Hover-to-hover step from the origin to $p_{\text{ref}} = (1.0,\; 0.5,\; 1.5)$ m with level
+Hover-to-hover step from the origin to $`p_{\text{ref}} = (1.0,\; 0.5,\; 1.5)`$ m with level
 attitude and zero velocity, $T_{\text{sim}} = 5$ s. Nominal plant: no disturbance, no model
 mismatch, full state measured.
 
@@ -114,7 +120,7 @@ mismatch, full state measured.
 
 ### 5.1 Flight path
 
-![3D flight path](../results/stage1_basic/trajectory_3d.png)
+<img src="../results/stage1_basic/trajectory_3d.png" alt="3D flight path" width="60%">
 
 The drone first climbs almost vertically and then flies a nearly straight line to the target.
 The vertical start comes from $v_z$ building up before the horizontal velocities (it peaks
@@ -136,7 +142,7 @@ thrust recovers and settles at $f_{\text{hover}} \approx 2.45$ N ($T_{\text{tota
 $t \approx 2$ s. Both input bounds are active during the transient, which is exactly the regime
 where MPC differs from an unconstrained LQR.
 
-The aggressiveness follows from the weighting. Position errors are weighted $80$–$120$ while
+The aggressiveness follows from the weighting. Position errors are weighted $80\text{–}120$ while
 thrust deviations cost only $R = 0.1$, so the optimizer treats thrust as almost free and goes
 straight to the bounds. A larger $R$ would give a smoother, slower transient.
 
@@ -155,7 +161,7 @@ rates up to $q \approx 5.2$ rad/s and $p \approx -2.5$ rad/s. Yaw is not command
 small transient ($\approx -3°$) caused by the yaw torque $\tau_z = c_\tau(-f_1+f_2-f_3+f_4)$ from
 unequal motor thrusts during the saturated phase; it returns to zero by $t \approx 2.5$ s.
 
-**Settling.** All 13 states settle to their references within $\approx 2$–$2.5$ s. This is
+**Settling.** All 13 states settle to their references within $\approx 2\text{–}2.5$ s. This is
 longer than the prediction horizon $T = 1.0$ s: at $t = 0$ the predicted trajectory ends far
 from the target, and the terminal cost $W_e = Q$ is only a rough guess of the remaining
 cost-to-go. The loop still converges, but this is the situation in which a certified terminal

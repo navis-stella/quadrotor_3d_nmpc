@@ -20,7 +20,9 @@ Near hover, approximate the NMPC law by a linear feedback $u = u_{\text{ref}} - 
 acting on $\dot x = Ax + Bu + w$ with a constant disturbance $w$. Since
 $(x_{\text{ref}}, u_{\text{ref}})$ is an equilibrium of the nominal model, the steady state satisfies
 
-$$(A - BK)(x^* - x_{\text{ref}}) = -w \quad\Longrightarrow\quad x^* - x_{\text{ref}} = -(A - BK)^{-1} w,$$
+```math
+(A - BK)(x^* - x_{\text{ref}}) = -w \quad\Longrightarrow\quad x^* - x_{\text{ref}} = -(A - BK)^{-1} w,
+```
 
 which is nonzero for every $w \neq 0$. Stronger weights shrink the offset but never remove it.
 
@@ -47,11 +49,13 @@ A 6-dimensional constant disturbance, split by where it enters:
 
 | Component | Unit | Frame | Physical source |
 |---|---|---|---|
-| $d_f = [d_{f_x}, d_{f_y}, d_{f_z}]$ | N | world | wind, mass error $\Delta m\, g$ |
+| $d_f = [d_{f_x}, d_{f_y}, d_{f_z}]$ | N | world | wind, mass error $`\Delta m\, g`$ |
 | $d_\tau = [d_{\tau_x}, d_{\tau_y}, d_{\tau_z}]$ | N·m | body | CoG offset → parasitic torque |
 
-$$\dot v = \frac{f_{\text{total}}}{m} R(q)_{:,2} - g\, e_z + \frac{d_f}{m}, \qquad
-I \dot\omega = \tau(u) - \omega \times (I\omega) + d_\tau, \qquad \dot d = 0,$$
+```math
+\dot v = \frac{f_{\text{total}}}{m} R(q)_{:,2} - g\, e_z + \frac{d_f}{m}, \qquad
+I \dot\omega = \tau(u) - \omega \times (I\omega) + d_\tau, \qquad \dot d = 0,
+```
 
 with $\dot p$ and $\dot q$ unchanged. One dynamics builder (`_build_f_expl`) produces three
 variants, so all of them share exactly the same physics:
@@ -67,21 +71,25 @@ parameter. Only the estimator works with the augmented state.
 
 ### 2.2 Augmented EKF
 
-Augmented state $z = [x;\, d] \in \mathbb{R}^{19}$, measurement $y = Hz = x$ with
+Augmented state $`z = [x;\, d] \in \mathbb{R}^{19}`$, measurement $y = Hz = x$ with
 $H = [I_{13} \mid 0]$. In this stage the full state is measured, so only $d$ is actually
 estimated.
 
 **Predict** (continuous-discrete, with the applied input $u_k$):
 
-$$\hat z_{k+1|k} = \mathrm{RK4}\bigl(f_{\text{aug}}, \hat z_{k|k}, u_k, T_s\bigr), \qquad
-F_d \approx I + F_c T_s, \qquad P_{k+1|k} = F_d P_{k|k} F_d^\top + Q_{\text{aug}} T_s,$$
+```math
+\hat z_{k+1|k} = \mathrm{RK4}\bigl(f_{\text{aug}}, \hat z_{k|k}, u_k, T_s\bigr), \qquad
+F_d \approx I + F_c T_s, \qquad P_{k+1|k} = F_d P_{k|k} F_d^\top + Q_{\text{aug}} T_s,
+```
 
 with $F_c = \partial f_{\text{aug}}/\partial z$ from CasADi and $Q_{\text{aug}} = \mathrm{blkdiag}(Q_x, Q_d)$.
 
 **Update** (Joseph form):
 
-$$S = HPH^\top + R, \qquad K = PH^\top S^{-1}, \qquad \hat z \leftarrow \hat z + K e, \qquad
-P \leftarrow (I - KH) P (I - KH)^\top + KRK^\top,$$
+```math
+S = HPH^\top + R, \qquad K = PH^\top S^{-1}, \qquad \hat z \leftarrow \hat z + K e, \qquad
+P \leftarrow (I - KH) P (I - KH)^\top + KRK^\top,
+```
 
 with $e = y - H\hat z$. A sign-flip guard handles the quaternion double cover ($q$ and $-q$
 are the same rotation).
@@ -89,7 +97,9 @@ are the same rotation).
 **How $\hat d$ is learned although $d$ is not measured.** Split the gain into its state and
 disturbance rows. The disturbance correction is
 
-$$\Delta\hat d = K_d\, e = P_{dx}\, S^{-1} e,$$
+```math
+\Delta\hat d = K_d\, e = P_{dx}\, S^{-1} e,
+```
 
 which is nonzero only because of the cross-covariance $P_{dx}$. The prediction step creates
 it: $F_c$ couples $d$ into $\dot x$ (e.g. $\partial \dot v / \partial d_f = I/m$), so uncertainty
@@ -105,7 +115,7 @@ and full-state measurement, it is.
 | $Q_x$ | $10^{-3}$ (position, quaternion), $10^{-2}$ (velocity, rates) | model is accurate; prevents covariance collapse |
 | $Q_d$ | $0.1$ (forces), $0.01$ (torques) | sets adaptation speed; larger → faster but noisier $\hat d$ |
 | $R$ | $10^{-3}$ (position, quaternion), $10^{-2}$ (velocity, rates) | clean full-state measurement |
-| $P_0$ | $0.01\, I$ (state), $1.0\, I$ (disturbance) | state known, disturbance unknown |
+| $P_0$ | $`0.01\, I`$ (state), $`1.0\, I`$ (disturbance) | state known, disturbance unknown |
 
 ### 2.3 Steady-state target calculator
 
@@ -121,29 +131,35 @@ $v = 0$, $\omega = 0$ all rate and gyroscopic terms vanish:
 
 **(1) Force balance → thrust magnitude and direction.**
 
-$$T_s\, z_b + d_f = m g\, e_3 \quad\Longrightarrow\quad
+```math
+T_s\, z_b + d_f = m g\, e_3 \quad\Longrightarrow\quad
 F_{\text{req}} = [-d_{f_x},\; -d_{f_y},\; mg - d_{f_z}]^\top, \quad
-T_s = \|F_{\text{req}}\|, \quad z_b = F_{\text{req}} / T_s.$$
+T_s = \|F_{\text{req}}\|, \quad z_b = F_{\text{req}} / T_s.
+```
 
 **(2) Attitude from $z_b$ and the reference yaw $\psi$.** $z_b$ fixes roll and pitch; $\psi$
 fixes the remaining degree of freedom:
 
-$$x_c = [\cos\psi,\; \sin\psi,\; 0], \quad
+```math
+x_c = [\cos\psi,\; \sin\psi,\; 0], \quad
 y_b = \frac{z_b \times x_c}{\|z_b \times x_c\|}, \quad
 x_b = y_b \times z_b, \quad
-R_s = [x_b \mid y_b \mid z_b],$$
+R_s = [x_b \mid y_b \mid z_b],
+```
 
 converted to $q_s$ with Shepperd's method ($q_w > 0$ enforced). If $z_b$ is nearly
 vertical, $y_b = [-\sin\psi, \cos\psi, 0]$ is used.
 
 **(3) Torque balance → motor thrusts.** With $\omega = 0$: $\tau(u_s) = -d_\tau$, so
 
-$$u_s = M^{-1} \bigl[T_s,\; -d_{\tau_x},\; -d_{\tau_y},\; -d_{\tau_z}\bigr]^\top, \qquad
-M = \begin{bmatrix} 1 & 1 & 1 & 1 \\ 0 & -L & 0 & L \\ -L & 0 & L & 0 \\ -c_\tau & c_\tau & -c_\tau & c_\tau \end{bmatrix},$$
+```math
+u_s = M^{-1} \bigl[T_s,\; -d_{\tau_x},\; -d_{\tau_y},\; -d_{\tau_z}\bigr]^\top, \qquad
+M = \begin{bmatrix} 1 & 1 & 1 & 1 \\ 0 & -L & 0 & L \\ -L & 0 & L & 0 \\ -c_\tau & c_\tau & -c_\tau & c_\tau \end{bmatrix},
+```
 
 clipped to $[0, f_{\max}]$ with a warning if a limit is active.
 
-**(4) Assemble.** Position is free at equilibrium, so $x_s = [p_{\text{ref}};\, 0;\, q_s;\, 0]$.
+**(4) Assemble.** Position is free at equilibrium, so $`x_s = [p_{\text{ref}};\, 0;\, q_s;\, 0]`$.
 
 The OCP now has zero cost at a point the plant can actually hold, so no trade-off remains
 and the offset is removed exactly (in the nominal-estimate limit $\hat d = d$).
@@ -215,14 +231,14 @@ git checkout stage3
 
 ## 4. Scenario
 
-Hover-to-hover step from the origin to $p_{\text{ref}} = (2,\, 1,\, 3)$ m, $T_{\text{sim}} = 10$ s.
+Hover-to-hover step from the origin to $`p_{\text{ref}} = (2,\, 1,\, 3)`$ m, $T_{\text{sim}} = 10$ s.
 A constant disturbance acts on the plant from $t = 0$:
 
 | Quantity | Value |
 |---|---|
 | $d_{f_x}$ | $+0.5$ N (wind) |
 | $d_{f_y}$ | $-0.3$ N (wind) |
-| $d_{f_z}$ | $-3 \times 0.981 = -2.943$ N ($\approx 30\%$ mass error) |
+| $d_{f_z}$ | $-3 \times 0.981 = -2.943$ N ($`\approx 30\%`$ mass error) |
 | $d_\tau$ | $0$ |
 
 The run is split into two phases. For $t < 4$ s, standard MPC flies the maneuver and shows the
@@ -234,7 +250,7 @@ isolates the *correction mechanism*; detection delay after a disturbance onset i
 
 | Quantity | Value |
 |---|---|
-| $F_{\text{req}}$ | $[-0.5,\; 0.3,\; 12.753]$ N |
+| $F_{\text{req}}$ | $`[-0.5,\; 0.3,\; 12.753]`$ N |
 | $T_s$ | $12.77$ N (vs. $mg = 9.81$ N) |
 | $u_s$ | $3.19$ N per motor (vs. $f_{\text{hover}} = 2.45$ N) |
 | pitch $\theta_s$ / roll $\phi_s$ | $-2.24°$ / $-1.35°$ (total tilt $2.62°$) |
@@ -245,8 +261,8 @@ isolates the *correction mechanism*; detection delay after a disturbance onset i
 
 ![EKF disturbance estimation](../results/stage3_offsetfree/disturbance.png)
 
-Starting from $\hat d = 0$, the force estimates converge within about $1$–$1.5$ s:
-$\hat d_{f_x}$ reaches $95\%$ of its true value after $1.0$ s, $\hat d_{f_z}$ converges in about
+Starting from $\hat d = 0$, the force estimates converge within about $1\text{–}1.5$ s:
+$\hat d_{f_x}$ reaches $`95\%`$ of its true value after $1.0$ s, $\hat d_{f_z}$ converges in about
 $1$ s, and $\hat d_{f_y}$ settles by about $1.5$ s after a small undershoot to $-0.31$ N. All of
 this happens well before $T_{\text{activate}}$, so the activation transient at $t = 4$ s is
 caused by the controller, not by the estimator. Over the last second of the run all six
@@ -268,7 +284,7 @@ steady state that is not the reference:
 
 | Position error | $\Delta p_x$ | $\Delta p_y$ | $\Delta p_z$ |
 |---|---|---|---|
-| standard MPC (mean over $t = 3$–$4$ s) | $+58.1$ mm | $-35.9$ mm | $-78.5$ mm |
+| standard MPC (mean over $t = 3\text{–}4$ s) | $+58.1$ mm | $-35.9$ mm | $-78.5$ mm |
 | offset-free (mean over last 1 s) | $< 0.05$ mm | $< 0.05$ mm | $< 0.05$ mm |
 
 Each offset points in the direction the disturbance pushes: downwind in $x$ and $y$, and
@@ -296,7 +312,7 @@ The motors stay equal because no torque disturbance is present.
 
 ### 5.4 Flight path
 
-![3D flight path](../results/stage3_offsetfree/trajectory_3d.png)
+<img src="../results/stage3_offsetfree/trajectory_3d.png" alt="3D flight path" width="60%">
 
 The path is again nearly straight. The short hook just below the target is phase 2: the drone
 first stops at the offset point and then climbs and shifts onto the reference after
@@ -315,7 +331,7 @@ activation.
   stays 13, and the DARE terminal cost is reused.
 - **Limitation.** This stage assumes the full state is measured, so the EKF only has to
   estimate $d$. A real drone does not measure velocity directly. Stage 4 removes that
-  assumption, measures only $y = [p;\, q;\, \omega]$, and compares two estimators for the
+  assumption, measures only $`y = [p;\, q;\, \omega]`$, and compares two estimators for the
   resulting harder problem → [Stage 4a — EKF](stage4a_ekf.md), [Stage 4b — MHE](stage4b_mhe.md).
 
 ## References

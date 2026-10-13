@@ -19,7 +19,7 @@ results with plots. This README gives the overview.
 | Inputs (4) | individual motor thrusts, $0 \le f_i \le 3 f_{\text{hover}} \approx 7.35$ N |
 | Layout | `+` configuration, hover thrust $f_{\text{hover}} = mg/4 \approx 2.45$ N |
 | Disturbance (Stages 3–4) | constant force (world frame) and torque (body frame), $d \in \mathbb{R}^6$ |
-| Tracking model (Stage 5) | state augmented by an artificial reference position, $\tilde x = [x;\, p_a] \in \mathbb{R}^{16}$, $\dot p_a = 0$ |
+| Tracking model (Stage 5) | state augmented by an artificial reference position, $`\tilde x = [x;\, p_a] \in \mathbb{R}^{16}`$, $\dot p_a = 0$ |
 | Integration | ERK4 (acados) |
 
 Equations of motion, disturbance model and quaternion conventions →
@@ -33,7 +33,7 @@ Equations of motion, disturbance model and quaternion conventions →
 | `stage2` | 2a | **Quasi-infinite horizon** — terminal cost $P_{\text{lyap}}$ + soft terminal set $\Omega_\alpha$ | [stage2_terminal_cost.md](docs/stage2_terminal_cost.md) |
 | `stage2` | 2b | **DARE terminal cost** — $P_{\text{lqr}}$ from the reduced-order DARE, no terminal set | [stage2_terminal_cost.md](docs/stage2_terminal_cost.md) |
 | `stage3` | 3 | **Offset-free NMPC** — disturbance model + EKF + analytical steady-state target calculator | [stage3_offset_free.md](docs/stage3_offset_free.md) |
-| `stage4` | 4a | **Partial measurement, augmented EKF** — only $y = [p;\, q;\, \omega]$ measured, with noise | [stage4a_ekf.md](docs/stage4a_ekf.md) |
+| `stage4` | 4a | **Partial measurement, augmented EKF** — only $`y = [p;\, q;\, \omega]`$ measured, with noise | [stage4a_ekf.md](docs/stage4a_ekf.md) |
 | `stage4` | 4b | **Lyapunov MHE** — weights and horizon from an LMI detectability certificate; comparison with the EKF | [stage4b_mhe.md](docs/stage4b_mhe.md) |
 | `stage5` | 5 | **Tracking NMPC with artificial reference** — piece-wise constant references, recursively feasible for any reference, converges to the closest admissible steady state (nominal plant, full state feedback) | [stage5_tracking.md](docs/stage5_tracking.md) |
 | *upcoming* | 6 | Time-varying reference trajectory tracking | |
@@ -49,7 +49,7 @@ Equations of motion, disturbance model and quaternion conventions →
 | 2a | The certified terminal set is tiny ($\alpha \approx 10^{-4}$); the trajectory enters it only after 2.3 s, so the guarantee covers just the final approach. |
 | 2b | Same nominal trajectory as Stage 1, now with the LQR cost-to-go as terminal cost; used as the terminal cost from Stage 3 on. |
 | 3 | Under wind and a 30% mass error, standard NMPC settles 58 / −36 / −79 mm off target; offset-free NMPC removes the offset to below 0.05 mm. |
-| 4a | With only $[p;\, q;\, \omega]$ measured, the EKF keeps tracking unbiased; velocity estimation error 53 mm/s, force-disturbance error 0.14 N, 0.7 ms per step. |
+| 4a | With only $`[p;\, q;\, \omega]`$ measured, the EKF keeps tracking unbiased; velocity estimation error 53 mm/s, force-disturbance error 0.14 N, 0.7 ms per step. |
 | 4b | The certified MHE ($T = 3$ s $> T_{\min} = 2$ s) estimates velocity $5\times$ and the disturbance $18\times$ more accurately than the EKF, at 14 ms per step (budget 50 ms). |
 | 5 | A reference sequence with 6 m jumps, the last one outside the room ($x = 12$ m), is flown on the nominal plant. The artificial reference $p_a^\ast$ runs ahead of the quadrotor and stops at the boundary of the steady-state set; the position settles at the closest admissible point $y_r^\ast = (8, 6, 2)$ m. The flight is aggressive (tilt up to ≈ 65°, body rates up to ≈ 6.6 rad/s, motors saturated at the jumps). |
 

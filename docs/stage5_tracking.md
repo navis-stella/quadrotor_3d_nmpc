@@ -44,24 +44,24 @@ Soft terminal constraints hide the problem instead of solving it. The tracking f
 For the plant $x^+ = f(x, u)$ every admissible steady state $(x_s, u_s)$ with $x_s = f(x_s, u_s)$
 is parametrized by an output $y_s$ through a map $g$:
 
-$$
+```math
 (x_s,\, u_s) = g(y_s), \qquad y_s \in \mathcal{Y}_s .
-$$
+```
 
 ### The OCP
 
 The MPC does not steer to $r$. It **optimizes an artificial reference** $y_a$ together with the
 inputs, and steers to the steady state belonging to $y_a$:
 
-$$
+```math
 \begin{aligned}
-\min_{u(\cdot),\, y_a} \quad & \sum_{k=0}^{N-1} \ell\big(x_k - x_a,\; u_k - u_a\big) \;+\; V_o(y_a - r) \\
-\text{s.t.} \quad & x_{k+1} = f(x_k, u_k), \quad x_0 = x(t) \\
-& (x_k, u_k) \in \mathcal{Z} \\
-& (x_a, u_a) = g(y_a), \quad y_a \in \mathcal{Y}_s \\
-& x_N = x_a
+\min_{u(\cdot),\, y_a} \quad & \sum_{k=0}^{N-1} \ell\big(x_k - x_a,\; u_k - u_a\big) \;+\; V_o(y_a - r)
+\\ \text{s.t.} \quad & x_{k+1} = f(x_k, u_k), \quad x_0 = x(t)
+\\ & (x_k, u_k) \in \mathcal{Z}
+\\ & (x_a, u_a) = g(y_a), \quad y_a \in \mathcal{Y}_s
+\\ & x_N = x_a
 \end{aligned}
-$$
+```
 
 Two ingredients carry the whole theory:
 
@@ -76,9 +76,9 @@ Two ingredients carry the whole theory:
 The offset cost $V_o$ is positive definite and strictly convex, and $\mathcal{Y}_s$ is convex and
 compact, so the closest admissible steady state is unique:
 
-$$
+```math
 y_r^\ast = \arg\min_{y \in \mathcal{Y}_s} V_o(y - r).
-$$
+```
 
 If $r \in \mathcal{Y}_s$ then $y_r^\ast = r$. Otherwise $y_r^\ast$ is the projection of $r$ onto
 $\mathcal{Y}_s$. Under the assumptions of Limon et al. (2018) the closed loop converges to the steady
@@ -97,8 +97,8 @@ state $g(y_r^\ast)$ — the optimal reachable one — and not merely to *some* s
 | Ingredient | Choice |
 |---|---|
 | Artificial reference $y_a$ | hover position $p_a \in \mathbb{R}^3$ (yaw fixed at 0) |
-| Steady-state map $g(p_a)$ | $x_a = [p_a,\; v = 0,\; q = [1,0,0,0],\; \omega = 0]$, $u_a = f_{\text{hover}} \cdot \mathbf 1$ |
-| Admissible set $\mathcal{Z}$ | $0 \le f_i \le F_{\max}$ and room walls $\pm[8.5,\, 8.5,\, 3.5]$ m on $p$ |
+| Steady-state map $g(p_a)$ | $`x_a = [p_a,\; v = 0,\; q = [1,0,0,0],\; \omega = 0]`$, $u_a = f_{\text{hover}} \cdot \mathbf 1$ |
+| Admissible set $\mathcal{Z}$ | $0 \le f_i \le F_{\max}$ and room walls $`\pm[8.5,\, 8.5,\, 3.5]`$ m on $p$ |
 | Steady-state set $\mathcal{Y}_s$ | room shrunk by 0.5 m: $[-8,8] \times [-8,8] \times [-3,3]$ m |
 | Offset cost | $V_o = \lVert p_a - r \rVert^2_T$, $T = \operatorname{diag}(50, 50, 50)$ |
 
@@ -118,17 +118,17 @@ state $g(y_r^\ast)$ — the optimal reachable one — and not merely to *some* s
 acados has no decision variable shared by all shooting nodes. The artificial reference is therefore
 added as a **state with zero dynamics**:
 
-$$
+```math
 \tilde x = \begin{bmatrix} x \\ p_a \end{bmatrix} \in \mathbb{R}^{16}, \qquad
 \dot x = f(x, u), \quad \dot p_a = 0 .
-$$
+```
 
 Only $x$ is fixed at node 0 (`idxbx_0 = 0..12`). $p_a$ stays free there and the dynamics copy it
 unchanged to every node, which is exactly one decision variable $p_a$.
 
 | Theory | acados |
 |---|---|
-| $\ell(x - x_a,\, u - u_a)$ | `NONLINEAR_LS` stage cost on $[x - x_a(p_a);\; u - u_a]$, `yref = 0` |
+| $`\ell(x - x_a,\, u - u_a)`$ | `NONLINEAR_LS` stage cost on $`[x - x_a(p_a);\; u - u_a]`$, `yref = 0` |
 | $V_o(y_a - r)$ | `NONLINEAR_LS` terminal cost on $p_a - r$, $r$ is a runtime parameter `model.p` |
 | $x_N = x_a$ | linear terminal constraint $C_e \tilde x_N = 0$ ($x_a$ is linear in $p_a$) |
 | $y_a \in \mathcal{Y}_s$ | box bounds on the $p_a$ states (constant, so enforced on nodes 1…N−1) |
@@ -168,7 +168,7 @@ The quadrotor starts hovering at the origin and flies this reference sequence on
 | 10 | (12, 6, 2) | $x = 12$ is **outside the room** → no admissible steady state at $r$ |
 
 For the last reference, $\mathcal{Y}_s$ ends at $x = 8$, so the expected end point is the projection
-$y_r^\ast = (8,\, 6,\, 2)$ m.
+$`y_r^\ast = (8,\, 6,\, 2)`$ m.
 
 ## 5. Results
 
@@ -192,13 +192,13 @@ All figures are in `results/stage5_tracking/`. Values below are read from the pl
   and coincides with the dotted $y_r^\ast$ curve. $p$ settles at 8 m, 0.5 m away from the
   walls at 8.5 m, and the OCP remains feasible although $r$ itself is inadmissible.
 
-The closed loop therefore converges to $y_r^\ast = (8,\, 6,\, 2)$ m. The exact end-point error
+The closed loop therefore converges to $`y_r^\ast = (8,\, 6,\, 2)`$ m. The exact end-point error
 $\lVert p_\text{end} - y_r^\ast \rVert$ and the number of failed OCP calls are printed by
 `summarize()` at the end of every run.
 
 ### 5.2 Flight path
 
-![3D trajectory](../results/stage5_tracking/trajectory_3d.png)
+<img src="../results/stage5_tracking/trajectory_3d.png" alt="3D trajectory" width="60%">
 
 A smooth path from the origin to (8, 6, 2) m. The bends mark the reference switches at 5 s and
 10 s. The star shows the final $y_r^\ast$, not the last $r$.

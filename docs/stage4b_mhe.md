@@ -4,7 +4,7 @@
 |---|---|
 | Git tag | `stage4` |
 | Files | `detectability_check.py` (offline), `ocp_config_mhe.py`, `state_est_mhe.py`, `simulate_mhe.py`, `simulate_compare.py` (+ shared loop `closed_loop_sim_config.py`) |
-| Estimator | moving horizon estimator on $z = [x;\, d] \in \mathbb{R}^{19}$, weights from an i-iIOSS (LMI) certificate |
+| Estimator | moving horizon estimator on $`z = [x;\, d] \in \mathbb{R}^{19}`$, weights from an i-iIOSS (LMI) certificate |
 | Certificate | `data/mhe_params.npz` — $P$, $Q$, $R$, $\lambda$, $T_{\min}$, envelope |
 | Results | `results/stage4b_mhe/`, `results/stage4_compare/` |
 
@@ -42,7 +42,9 @@ Consider $\dot z = f(z, u, w)$, $y = h(z)$, with a generalized disturbance $w$. 
 notion of the 2024 paper) with a quadratic Lyapunov function if there are $P \succ 0$,
 $Q, R \succeq 0$ and $\kappa > 0$ such that for any two trajectories with the same input
 
-$$\frac{d}{dt}\|z - \tilde z\|_P^2 \;\le\; -\kappa\, \|z - \tilde z\|_P^2 + \|w - \tilde w\|_Q^2 + \|y - \tilde y\|_R^2 .$$
+```math
+\frac{d}{dt}\|z - \tilde z\|_P^2 \;\le\; -\kappa\, \|z - \tilde z\|_P^2 + \|w - \tilde w\|_Q^2 + \|y - \tilde y\|_R^2 .
+```
 
 Reading: two trajectories converge at rate $\kappa$ *unless* their disturbances or their outputs
 differ. If they produce the same outputs under the same disturbances, they must converge,
@@ -55,8 +57,10 @@ $\lambda = e^{-\kappa}$.
 At time $t$ the MHE optimizes the state at the start of the window $[t - T, t]$ and the
 disturbance trajectory, with cost (paper, eq. 9)
 
-$$J = 2\,\lambda^{T}\, \bigl\|\hat z(t - T) - \bar z\bigr\|_P^2
-\;+\; \int_{t-T}^{t} \lambda^{\,t - \tau} \Bigl(2\,\|\hat w(\tau)\|_Q^2 + \|\hat y(\tau) - y(\tau)\|_R^2\Bigr)\, d\tau ,$$
+```math
+J = 2\,\lambda^{T}\, \bigl\|\hat z(t - T) - \bar z\bigr\|_P^2
+\;+\; \int_{t-T}^{t} \lambda^{\,t - \tau} \Bigl(2\,\|\hat w(\tau)\|_Q^2 + \|\hat y(\tau) - y(\tau)\|_R^2\Bigr)\, d\tau ,
+```
 
 subject to the model. The estimate is the end point $\hat z(t)$. Three features distinguish it
 from a hand-tuned MHE:
@@ -69,8 +73,10 @@ from a hand-tuned MHE:
 The factors 2 come from Young's inequality in the proof, which compares the MHE solution with
 the true trajectory (a feasible candidate). With $P_1 = P_2 = P$ the result is:
 
-$$\boxed{\;T > T_{\min} = \frac{\ln 4}{\kappa}\;} \quad \text{(paper, eq. 17)}
-\quad\Longrightarrow\quad \text{robust global exponential stability of the estimation error},$$
+```math
+\boxed{\;T > T_{\min} = \frac{\ln 4}{\kappa}\;} \quad \text{(paper, eq. 17)}
+\quad\Longrightarrow\quad \text{robust global exponential stability of the estimation error},
+```
 
 with guaranteed contraction rate $\rho = 4^{1/T}\lambda$ per second (eq. 18). The bound is in
 **seconds**, independent of the sample time: a shorter sample time needs more nodes for the
@@ -82,8 +88,10 @@ term in the true disturbances.
 For $\dot z = f(z, u) + w$ (so $B = \partial f / \partial w = I$) and a linear measurement
 $y = Cz$ ($D = 0$), the i-iIOSS inequality holds on a **convex** set if the LMI (paper, eq. 31)
 
-$$\begin{bmatrix} PA + A^\top P + \kappa P - C^\top R C & PB \\ B^\top P & -Q \end{bmatrix} \preceq 0,
-\qquad A = \frac{\partial f}{\partial z},$$
+```math
+\begin{bmatrix} PA + A^\top P + \kappa P - C^\top R C & PB \\ B^\top P & -Q \end{bmatrix} \preceq 0,
+\qquad A = \frac{\partial f}{\partial z},
+```
 
 holds at every point of that set. The proof integrates along the straight line between two
 states, so the line must stay inside the set where the LMI was imposed; this is why convexity
@@ -95,8 +103,10 @@ is required.
 
 The certificate is computed for exactly the model the MHE optimizes over:
 
-$$\dot z = \begin{bmatrix} f(x, u, d) \\ 0 \end{bmatrix} + w, \quad z \in \mathbb{R}^{19}, \quad
-w \in \mathbb{R}^{19}, \qquad y = Cz = [p;\, q;\, \omega].$$
+```math
+\dot z = \begin{bmatrix} f(x, u, d) \\ 0 \end{bmatrix} + w, \quad z \in \mathbb{R}^{19}, \quad
+w \in \mathbb{R}^{19}, \qquad y = Cz = [p;\, q;\, \omega].
+```
 
 The structure of $A = \partial f / \partial z$ decides what has to be covered. The script asserts
 each property symbolically before solving:
@@ -106,19 +116,19 @@ each property symbolically before solving:
 | $p$, $v$, $d$, $w$ | no | unbounded |
 | $q$ | yes, affinely | ball $\Vert q\Vert \le r_{\max} = 1.02$ (the unit sphere is not convex; the ball is its convex hull, with margin for norm drift of the estimate) |
 | $\omega$ | yes, affinely | box $\lvert\omega_i\rvert \le \omega_{\max} = 2$ rad/s |
-| $u$ | only through $T_{\text{total}} = \sum f_i$, affinely | $T_{\text{total}} \in [0,\, 4 f_{\max}] = [0,\, 29.4]$ N |
+| $u$ | only through $T_{\text{total}} = \sum f_i$, affinely | $`T_{\text{total}} \in [0,\, 4 f_{\max}] = [0,\, 29.4]`$ N |
 
 ### 3.2 Finite reduction and cutting-plane solve
 
 Because $A$ is affine in $(q, \omega)$ and in $T_{\text{total}}$, and the LMI is affine in $A$, the LMI
 holds on the convex hull of the points where it is imposed. So only the 8 vertices of the
 $\omega$ box and the 2 endpoints of $T_{\text{total}}$ are needed, combined with a set of attitude
-points on $\|q\| = r_{\max}$ whose hull approximates the ball. Only the attitude needs real gridding.
+points on $`\|q\| = r_{\max}`$ whose hull approximates the ball. Only the attitude needs real gridding.
 
 1. **Attitude pool.** A $20^3$ hyperspherical grid on the unit sphere (both hemispheres, since
    $A(q) \ne A(-q)$ and the hull must contain the interior), scaled to $r_{\max}$.
 2. **SDP.** For a fixed $\kappa$, the LMI is affine in $(P, Q, R)$. Minimize
-   $\mathrm{tr}\,Q + \mathrm{tr}\,R$ (tightest detectability statement) subject to $P \succeq 10^{-2} I$
+   $`\mathrm{tr}\,Q + \mathrm{tr}\,R`$ (tightest detectability statement) subject to $P \succeq 10^{-2} I$
    (fixes the scale), lower bounds on $\mathrm{diag}(Q)$ and $\mathrm{diag}(R)$, and the LMI
    $\preceq -10^{-5} I$ at each point. $P$ is a full $19 \times 19$ matrix, $Q$ and $R$ are diagonal.
    The floors on $Q$ for $w_p$ and $w_q$ are set to $1$ so the exact kinematics
@@ -126,7 +136,7 @@ points on $\|q\| = r_{\max}$ whose hull approximates the ball. Only the attitude
 3. **Cutting plane.** Solve on a small active set of attitudes, evaluate the LMI eigenvalue on
    the *whole* pool independently of the solver, add the worst violators, repeat until none
    remain. The certificate is this eigenvalue check, not the solver status.
-4. **Spot check.** $20\,000$ random attitudes on the sphere with interior $\omega$, $T_{\text{total}}$ guard
+4. **Spot check.** $`20\,000`$ random attitudes on the sphere with interior $\omega$, $T_{\text{total}}$ guard
    the gap between the pool's polytope hull and the ball.
 
 Only a certificate that passes both checks is written to `data/mhe_params.npz`.
@@ -135,8 +145,10 @@ Only a certificate that passes both checks is written to `data/mhe_params.npz`.
 
 The decay is the design input; everything else follows:
 
-$$\lambda = 0.5 \text{ per s} \;\to\; \kappa = \ln 2 = 0.693 \text{ s}^{-1} \;\to\; \text{LMI} \;\to\; P, Q, R \;\to\;
-T_{\min} = \frac{\ln 4}{\kappa} = 2.0 \text{ s}.$$
+```math
+\lambda = 0.5 \text{ per s} \;\to\; \kappa = \ln 2 = 0.693 \text{ s}^{-1} \;\to\; \text{LMI} \;\to\; P, Q, R \;\to\;
+T_{\min} = \frac{\ln 4}{\kappa} = 2.0 \text{ s}.
+```
 
 All stored quantities are continuous time, so changing the MHE sample time or horizon factor
 needs no new SDP solve. If the LMI is infeasible for a chosen $\lambda$, the options are a slower
@@ -156,18 +168,20 @@ decay ($\lambda \to 1$, longer $T_{\min}$) or a smaller envelope.
 The roles of `model.u` swap compared with the MPC: the optimizer chooses the noise, and the
 thrust becomes a parameter that differs per node.
 
-**Horizon.** $N = \lceil c\, T_{\min} / T_s \rceil$ with $c = 1.5$, giving $N = 60$ and $T = 3.0$ s at
+**Horizon.** $`N = \lceil c\, T_{\min} / T_s \rceil`$ with $c = 1.5$, giving $N = 60$ and $T = 3.0$ s at
 $T_s = 0.05$ s. The minimum allowed is $N_{\min} = 41$ (strict $T > 2$ s). The guaranteed rate is
 $\rho = 4^{1/3} \cdot 0.5 = 0.794$ per second. The MHE window is independent of the 1 s MPC horizon.
 
 **Cost on the grid.** Every stage $i$ carries its age $\tau_i = (N - i) T_s$ and uses one expression,
 the integrand of §2.2:
 
-$$\ell_i = a_i \frac{2\,\lambda^{\tau_i}}{T_s} \|e_z\|_P^2 + 2\,\lambda^{\tau_i} \|w_i\|_Q^2 + m_i\, \lambda^{\tau_i} \|e_{y,i}\|_R^2 .$$
+```math
+\ell_i = a_i \frac{2\,\lambda^{\tau_i}}{T_s} \|e_z\|_P^2 + 2\,\lambda^{\tau_i} \|w_i\|_Q^2 + m_i\, \lambda^{\tau_i} \|e_{y,i}\|_R^2 .
+```
 
 acados multiplies each stage cost by its time step (default `cost_scaling`), which turns the
 integrand into the Riemann sum of the integral. The arrival term is a point cost, so the
-$1/T_s$ cancels the scaling and it carries exactly $2\lambda^T\|\cdot\|_P^2$. The flags $a_i, m_i \in \{0, 1\}$
+$1/T_s$ cancels the scaling and it carries exactly $`2\lambda^T\|\cdot\|_P^2`$. The flags $`a_i, m_i \in \{0, 1\}`$
 mark the node with the arrival cost and the nodes with measurements.
 
 **Quaternion error.** For the attitude parts of $e_z$ and $e_y$:
@@ -175,11 +189,11 @@ $e_q = \lvert q \otimes q_r^{-1} \rvert - [1, 0, 0, 0]^\top$ (elementwise absolu
 for both $q_r$ and $-q_r$.
 
 **Constraints.**
-- Soft $\|q\|^2 = 1$ on every node, including the terminal node whose state goes to the MPC
+- Soft $`\|q\|^2 = 1`$ on every node, including the terminal node whose state goes to the MPC
   (quadratic slack penalty $10^4$).
 - Hard $\lvert\hat\omega_i\rvert \le \omega_{\max}$ on every node: the estimated trajectory must stay in the
   certified set (paper, constraint 8c). It is always feasible because $w_\omega$ can bend any
-  trajectory into the box. The MPC keeps the *true* rates inside with its soft $0.9\,\omega_{\max}$ box.
+  trajectory into the box. The MPC keeps the *true* rates inside with its soft $`0.9\,\omega_{\max}`$ box.
 
 **Solver.** `SQP_RTI` (one SQP iteration per sample), exact Hessian, `PARTIAL_CONDENSING_HPIPM`,
 ERK4 over each $T_s$.
@@ -212,7 +226,7 @@ git checkout stage4
 ## 5. Scenario
 
 Identical to [Stage 4a](stage4a_ekf.md#4-scenario): same reference, disturbance, sensor noise,
-seed, prior $\bar z_0$ and controller. Steady-state numbers cover $t = 5$–$10$ s; errors are the
+seed, prior $\bar z_0$ and controller. Steady-state numbers cover $t = 5\text{–}10$ s; errors are the
 norm of the per-axis mean absolute error, as printed by `simulate_compare.py`.
 
 ## 6. Results
@@ -250,9 +264,9 @@ The maximum true body rate is $1.83$ rad/s, inside the certified $2$ rad/s.
 ![Motor thrusts](../results/stage4b_mhe/inputs.png)
 
 Thrusts settle at the equilibrium ($12.77$ N total) with a standard deviation of $0.08$ N per
-motor and $0.15$ N in total, about $4$–$5\times$ less than with the EKF.
+motor and $0.15$ N in total, about $4\text{–}5\times$ less than with the EKF.
 
-![3D flight path](../results/stage4b_mhe/trajectory_3d.png)
+<img src="../results/stage4b_mhe/trajectory_3d.png" alt="3D flight path" width="60%">
 
 ### 6.4 Computation time
 
@@ -267,18 +281,18 @@ $1.6$ ms. All SQP_RTI calls succeeded.
 
 ![EKF vs MHE](../results/stage4_compare/ekf_vs_mhe.png)
 
-| Steady state ($t = 5$–$10$ s) | EKF | MHE | Ratio |
+| Steady state ($t = 5\text{–}10$ s) | EKF | MHE | Ratio |
 |---|---|---|---|
 | position error $\Vert \Delta p\Vert$ | $10.1$ mm | $6.8$ mm | $1.5\times$ |
 | velocity estimation error $\Vert \Delta \hat v\Vert$ | $53.2$ mm/s | $11.0$ mm/s | $4.8\times$ |
 | force-disturbance error $\Vert \Delta \hat d_f\Vert$ | $0.138$ N | $0.0078$ N | $18\times$ |
-| roll / pitch standard deviation | $1.4°$ / $2.0°$ | $0.35°$ / $0.37°$ | $4$–$5\times$ |
+| roll / pitch standard deviation | $1.4°$ / $2.0°$ | $0.35°$ / $0.37°$ | $4\text{–}5\times$ |
 | total thrust standard deviation | $0.75$ N | $0.15$ N | $5\times$ |
 
 | Transient and cost | EKF | MHE |
 |---|---|---|
 | $\hat d_f$ mean converged | $\approx 1$ s | $\approx 2$ s |
-| $\Vert \hat d_f - d_f\Vert < 0.1$ N from | not reached (noise band $\approx 0.1$–$0.3$ N) | $1.95$ s |
+| $\Vert \hat d_f - d_f\Vert < 0.1$ N from | not reached (noise band $\approx 0.1\text{–}0.3$ N) | $1.95$ s |
 | $\Vert p - p_{\text{ref}}\Vert < 5$ cm / $< 2$ cm from | $1.9$ s / $4.0$ s | $2.75$ s / $3.6$ s |
 | $p_x$ overshoot | $15$ cm | $9$ cm |
 | estimator time, mean / p99 | $0.69$ / $1.5$ ms | $13.8$ / $25.8$ ms |
@@ -287,11 +301,11 @@ $1.6$ ms. All SQP_RTI calls succeeded.
 trade-off. The EKF reacts within one sample and gets the disturbance mean right in about 1 s,
 but its one-step correction passes position noise straight into $\hat v$ and $\hat d$. The MHE
 fits a 3 s window of measurements to the nonlinear model; this averages the noise away and
-gives a 5–20$\times$ more accurate estimate once converged, but it needs about 2 s to move $\hat d$
+gives a $5\text{–}20\times$ more accurate estimate once converged, but it needs about 2 s to move $\hat d$
 away from the zero prior. The MHE also starts with a one-sample information disadvantage
 (prediction form) and still wins in steady state.
 
-The slow start is consistent with the certificate weights: minimizing $\mathrm{tr}\,Q + \mathrm{tr}\,R$
+The slow start is consistent with the certificate weights: minimizing $`\mathrm{tr}\,Q + \mathrm{tr}\,R`$
 makes the measurement weight $R$ as small as the LMI allows, so early on the arrival prior
 ($\hat d = 0$) dominates. One SQP iteration per sample (RTI) further limits how far the estimate can
 move per step during large changes.
@@ -305,7 +319,7 @@ also not tested yet.
 
 ## 8. Limitations and open points
 
-- **Quaternion metric.** The certificate bounds $\|z - \tilde z\|_P^2$ with a Euclidean difference in
+- **Quaternion metric.** The certificate bounds $`\|z - \tilde z\|_P^2`$ with a Euclidean difference in
   $q$; the MHE cost uses the multiplicative error $\lvert q \otimes q_r^{-1}\rvert - [1,0,0,0]$. For small
   errors the two agree up to a factor, but the cost is not literally the certified function.
 - **Exact optimizer vs. RTI.** The stability result of §2.2 applies to the optimal MHE solution; `SQP_RTI` performs
@@ -314,10 +328,10 @@ also not tested yet.
   sum on the $T_s$ grid and the model an RK4 step. Both approximations shrink with $T_s$; the
   certificate itself is purely continuous time.
 - **Hull of the attitude pool.** The LMI is proven on the convex hull of a finite attitude pool,
-  a polytope inside the ball $\|q\| \le 1.02$. The random spot check guards the gap but is not a
+  a polytope inside the ball $`\|q\| \le 1.02`$. The random spot check guards the gap but is not a
   proof.
 - **Envelope.** The guarantee assumes the true and estimated trajectories stay in the certified
-  set. The body rates are logged and stay inside ($1.83 \le 2$ rad/s); $\|q\|$ of the estimate is
+  set. The body rates are logged and stay inside ($1.83 \le 2$ rad/s); $`\|q\|`$ of the estimate is
   not logged yet.
 
 ## 9. Takeaways
