@@ -266,7 +266,9 @@ The maximum true body rate is $1.83$ rad/s, inside the certified $2$ rad/s.
 Thrusts settle at the equilibrium ($12.77$ N total) with a standard deviation of $0.08$ N per
 motor and $0.15$ N in total, about $4\text{–}5\times$ less than with the EKF.
 
-<img src="../results/stage4b_mhe/trajectory_3d.png" alt="3D flight path" width="60%">
+<p align="center">
+  <img src="../results/stage4b_mhe/trajectory_3d.png" alt="3D flight path" width="60%">
+</p>
 
 ### 6.4 Computation time
 

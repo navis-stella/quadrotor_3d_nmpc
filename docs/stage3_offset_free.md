@@ -312,7 +312,9 @@ The motors stay equal because no torque disturbance is present.
 
 ### 5.4 Flight path
 
-<img src="../results/stage3_offsetfree/trajectory_3d.png" alt="3D flight path" width="60%">
+<p align="center">
+  <img src="../results/stage3_offsetfree/trajectory_3d.png" alt="3D flight path" width="60%">
+</p>
 
 The path is again nearly straight. The short hook just below the target is phase 2: the drone
 first stops at the offset point and then climbs and shifts onto the reference after

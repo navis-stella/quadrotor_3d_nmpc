@@ -247,7 +247,9 @@ The same noise is visible in the thrusts. The mean total thrust is $12.77$ N, ex
 equilibrium $T_s$, but each motor fluctuates with a standard deviation of about $0.35$ N, and the
 total with $0.75$ N.
 
-<img src="../results/stage4a_ekf/trajectory_3d.png" alt="3D flight path" width="60%">
+<p align="center">
+  <img src="../results/stage4a_ekf/trajectory_3d.png" alt="3D flight path" width="60%">
+</p>
 
 The path is S-shaped rather than straight as in Stage 3. The vertical motion comes in two
 bursts ($v_z$ peaks at $t \approx 0.4$ s and $1.1$ s) separated by the zero-thrust braking phase,

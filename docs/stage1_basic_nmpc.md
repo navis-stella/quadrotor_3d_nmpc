@@ -120,7 +120,9 @@ mismatch, full state measured.
 
 ### 5.1 Flight path
 
-<img src="../results/stage1_basic/trajectory_3d.png" alt="3D flight path" width="60%">
+<p align="center">
+  <img src="../results/stage1_basic/trajectory_3d.png" alt="3D flight path" width="60%">
+</p>
 
 The drone first climbs almost vertically and then flies a nearly straight line to the target.
 The vertical start comes from $v_z$ building up before the horizontal velocities (it peaks

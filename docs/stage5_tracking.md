@@ -100,7 +100,7 @@ state $g(y_r^\ast)$ — the optimal reachable one — and not merely to *some* s
 | Steady-state map $g(p_a)$ | $`x_a = [p_a,\; v = 0,\; q = [1,0,0,0],\; \omega = 0]`$, $u_a = f_{\text{hover}} \cdot \mathbf 1$ |
 | Admissible set $\mathcal{Z}$ | $0 \le f_i \le F_{\max}$ and room walls $`\pm[8.5,\, 8.5,\, 3.5]`$ m on $p$ |
 | Steady-state set $\mathcal{Y}_s$ | room shrunk by 0.5 m: $[-8,8] \times [-8,8] \times [-3,3]$ m |
-| Offset cost | $V_o = \lVert p_a - r \rVert^2_T$, $T = \operatorname{diag}(50, 50, 50)$ |
+| Offset cost | $V_o = \lVert p_a - r \rVert^2_T$, $T = \mathrm{diag}(50, 50, 50)$ |
 
 - $g$ is affine in $p_a$, hence Lipschitz with constant 1. It is implemented **once**
   (`steady_state_map` in `quadrotor_3d_model.py`) and accepts NumPy or CasADi input, so the OCP and
@@ -198,7 +198,9 @@ $\lVert p_\text{end} - y_r^\ast \rVert$ and the number of failed OCP calls are p
 
 ### 5.2 Flight path
 
-<img src="../results/stage5_tracking/trajectory_3d.png" alt="3D trajectory" width="60%">
+<p align="center">
+  <img src="../results/stage5_tracking/trajectory_3d.png" alt="3D trajectory" width="60%">
+</p>
 
 A smooth path from the origin to (8, 6, 2) m. The bends mark the reference switches at 5 s and
 10 s. The star shows the final $y_r^\ast$, not the last $r$.
