@@ -198,16 +198,16 @@ Per step $k$, in the order of `simulate_offsetfree.py`:
 
 ```mermaid
 flowchart TD
-    A[Measure y = x_k] --> B["EKF update(y)<br/>x̂, d̂"]
-    B --> C{t ≥ T_activate ?}
-    C -- "yes: offset-free" --> D["ss_target(x_ref, d̂) → x_s, u_s<br/>p = d̂ at all nodes<br/>yref = (x_s, u_s)"]
-    C -- "no: standard MPC" --> E["p = 0<br/>yref = (x_ref, u_hover)"]
-    D --> F["Solve OCP (SQP_RTI)<br/>x0 = x_k"]
+    A["Measure<br/>$$y = x_k$$"] --> B["EKF update<br/>$$\hat x,\ \hat d$$"]
+    B --> C{"$$t \ge T_{\text{activate}}$$"}
+    C -- "yes: offset-free" --> D["$$\mathtt{ss\_target}(x_{\text{ref}}, \hat d) \to (x_s, u_s)$$<br/>$$p = \hat d \text{ at all nodes}$$<br/>$$y_{\text{ref}} = (x_s, u_s)$$"]
+    C -- "no: standard MPC" --> E["$$p = 0$$<br/>$$y_{\text{ref}} = (x_{\text{ref}}, u_{\text{hover}})$$"]
+    D --> F["Solve OCP (SQP_RTI)<br/>$$x_0 = x_k$$"]
     E --> F
-    F --> G[Apply u_k]
-    G --> H["EKF predict(u_k)"]
-    G --> I["Plant step with d_true<br/>normalize quaternion"]
-    H --> K[k ← k+1]
+    F --> G["Apply<br/>$$u_k$$"]
+    G --> H["EKF predict<br/>$$u_k$$"]
+    G --> I["Plant step<br/>$$d = d_{\text{true}}$$<br/>normalize quaternion"]
+    H --> K["$$k \leftarrow k+1$$"]
     I --> K
     K --> A
 ```

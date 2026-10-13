@@ -152,12 +152,12 @@ only choose the estimator; sensor, seed, scenario, controller and prior are iden
 
 ```mermaid
 flowchart LR
-    P[Plant<br/>true x, d_true] -->|x_k| S[Sensor<br/>y = p, q, ω + noise]
-    S -->|y_k| E[Estimator<br/>EKF or MHE]
-    E -->|x̂_k, d̂_k| T[Target calculator<br/>x_s, u_s under d̂]
-    T --> M[Offset-free NMPC<br/>x0 = x̂_k, p = d̂_k]
-    M -->|u_k| P
-    M -->|u_k| E
+    P["Plant<br/>$$x,\ d_{\text{true}}$$"] -->|"$$x_k$$"| S["Sensor<br/>$$y = [p;\, q;\, \omega] + \nu$$"]
+    S -->|"$$y_k$$"| E["Estimator<br/>EKF or MHE"]
+    E -->|"$$\hat x_k,\ \hat d_k$$"| T["Target calculator<br/>$$(x_s, u_s) \text{ under } \hat d_k$$"]
+    T -->|"$$(x_s, u_s)$$"| M["Offset-free NMPC<br/>$$x_0 = \hat x_k,\ p = \hat d_k$$"]
+    M -->|"$$u_k$$"| P
+    M -->|"$$u_k$$"| E
 ```
 
 Per step $k$:
