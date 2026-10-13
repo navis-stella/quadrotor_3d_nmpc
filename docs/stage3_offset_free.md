@@ -198,9 +198,9 @@ Per step $k$, in the order of `simulate_offsetfree.py`:
 
 ```mermaid
 flowchart TD
-    A[Measure y = x_k] --> B["EKF update(y)<br/>x̂, d̂"]
+    A[Measure y = x_k] --> B["EKF update(y)<br/>x_hat, d_hat"]
     B --> C{t ≥ T_activate ?}
-    C -- "yes: offset-free" --> D["ss_target(x_ref, d̂) → x_s, u_s<br/>p = d̂ at all nodes<br/>yref = (x_s, u_s)"]
+    C -- "yes: offset-free" --> D["ss_target(x_ref, d_hat) → x_s, u_s<br/>p = d_hat at all nodes<br/>yref = (x_s, u_s)"]
     C -- "no: standard MPC" --> E["p = 0<br/>yref = (x_ref, u_hover)"]
     D --> F["Solve OCP (SQP_RTI)<br/>x0 = x_k"]
     E --> F
