@@ -11,6 +11,7 @@ titles and paths.
     plot_solve_times                                 estimator vs MPC compute time
     plot_estimator_comparison                        EKF vs MHE     (Stage 4)
     plot_artificial_reference                        p, p_a*, r     (Stage 5)
+    plot_tracking_error                              ‖p − p_r‖, ∠(q, q_r)  (Stage 6)
 
 All functions require explicit title and save_path — no stage-specific
 defaults here, so each simulation script controls its own labeling.
@@ -91,18 +92,27 @@ def plot_states(X:            np.ndarray,
                 save_path:    str,
                 X_s:          np.ndarray = None,
                 t_switch:     float      = None,
-                switch_label: str        = 'switch'):
+                switch_label: str        = 'switch',
+                Y:            np.ndarray = None):
     """
     Plot state trajectories (4 rows × 3 columns).
 
     The internal state uses quaternions, but the attitude row is plotted as
     Euler angles (roll/pitch/yaw in degrees) for human readability.
 
+    x_ref is a constant set point (13,) — or, Stage 6, a time-varying
+    reference (m, 13) on the same grid Ts, drawn as a dashed curve.
+
     Optional (Stage 3):
         X_s       (n, 13) equilibrium targets from ss_target — drawn on the
                   attitude row, the only one where they differ from x_ref
                   (p_s = p_ref, v_s = ω_s = 0)
         t_switch  [s] instant to mark (offset-free activation)
+
+    Optional (Stage 6):
+        Y         (n, 10) noisy measurements y = [p; q; ω] on the grid Ts —
+                  dots on the position, attitude and rate rows (v is not
+                  measured)
 
     Layout:
         Row 0:  px, py, pz             (position)
@@ -112,11 +122,26 @@ def plot_states(X:            np.ndarray,
     """
     t_x = np.arange(X.shape[0]) * Ts
 
+    X_ref      = np.atleast_2d(x_ref)              # (1, 13) set point or (m, 13)
+    t_r        = np.arange(X_ref.shape[0]) * Ts
     euler_traj = np.rad2deg(quat_to_euler(X[:, 6:10]))
-    euler_ref  = np.rad2deg(quat_to_euler(x_ref[6:10]))
+    euler_ref  = np.rad2deg(quat_to_euler(X_ref[:, 6:10]))
+
+    def ref_line(ax, r):
+        if len(r) == 1:
+            ax.axhline(r[0], color='r', linestyle='--', linewidth=1, label='ref')
+        else:
+            ax.plot(t_r, r, 'r--', linewidth=1, label='ref')
     if X_s is not None:
         t_s     = np.arange(X_s.shape[0]) * Ts
         euler_s = np.rad2deg(quat_to_euler(X_s[:, 6:10]))
+    if Y is not None:
+        t_y     = np.arange(Y.shape[0]) * Ts
+        euler_y = np.rad2deg(quat_to_euler(Y[:, 3:7]))
+
+    def meas_dots(ax, y):
+        if Y is not None:
+            ax.plot(t_y, y, '.', color='darkgoldenrod', ms=2.5, alpha=0.6, label='measured', zorder=1)
 
     fig, axes = plt.subplots(4, 3, figsize=(14, 12))
     fig.suptitle(title, fontsize=14)
@@ -125,8 +150,9 @@ def plot_states(X:            np.ndarray,
     pos_labels = ['px [m]', 'py [m]', 'pz [m]']
     for i in range(3):
         ax = axes[0][i]
+        meas_dots(ax, None if Y is None else Y[:, i])
         ax.plot(t_x, X[:, i], 'b', linewidth=1.2, label='state')
-        ax.axhline(x_ref[i], color='r', linestyle='--', linewidth=1, label='ref')
+        ref_line(ax, X_ref[:, i])
         _mark_switch(ax, t_switch, switch_label)
         ax.set_ylabel(pos_labels[i])
         ax.set_xlabel('t [s]')
@@ -138,7 +164,7 @@ def plot_states(X:            np.ndarray,
     for i in range(3):
         ax = axes[1][i]
         ax.plot(t_x, X[:, 3 + i], 'b', linewidth=1.2, label='state')
-        ax.axhline(x_ref[3 + i], color='r', linestyle='--', linewidth=1, label='ref')
+        ref_line(ax, X_ref[:, 3 + i])
         _mark_switch(ax, t_switch, switch_label)
         ax.set_ylabel(vel_labels[i])
         ax.set_xlabel('t [s]')
@@ -149,8 +175,9 @@ def plot_states(X:            np.ndarray,
     att_labels = ['roll φ [°]', 'pitch θ [°]', 'yaw ψ [°]']
     for i in range(3):
         ax = axes[2][i]
+        meas_dots(ax, None if Y is None else euler_y[:, i])
         ax.plot(t_x, euler_traj[:, i], 'b', linewidth=1.2, label='state')
-        ax.axhline(euler_ref[i], color='r', linestyle='--', linewidth=1, label='ref')
+        ref_line(ax, euler_ref[:, i])
         if X_s is not None:
             ax.plot(t_s, euler_s[:, i], 'g--', linewidth=1, alpha=0.8, label='eq. target')
         _mark_switch(ax, t_switch, switch_label)
@@ -163,8 +190,9 @@ def plot_states(X:            np.ndarray,
     rate_labels = ['p [rad/s]', 'q [rad/s]', 'r [rad/s]']
     for i in range(3):
         ax = axes[3][i]
+        meas_dots(ax, None if Y is None else Y[:, 7 + i])
         ax.plot(t_x, X[:, 10 + i], 'b', linewidth=1.2, label='state')
-        ax.axhline(x_ref[10 + i], color='r', linestyle='--', linewidth=1, label='ref')
+        ref_line(ax, X_ref[:, 10 + i])
         _mark_switch(ax, t_switch, switch_label)
         ax.set_ylabel(rate_labels[i])
         ax.set_xlabel('t [s]')
@@ -186,7 +214,8 @@ def plot_inputs(U:            np.ndarray,
                 title:        str,
                 save_path:    str,
                 t_switch:     float = None,
-                switch_label: str   = 'switch'):
+                switch_label: str   = 'switch',
+                U_ref:        np.ndarray = None):
     """
     Plot input (motor thrust) trajectories.
 
@@ -195,6 +224,7 @@ def plot_inputs(U:            np.ndarray,
         Right:  total thrust T = f1+f2+f3+f4  vs  mg
 
     Optional (Stage 3): t_switch [s] instant to mark (offset-free activation).
+    Optional (Stage 6): U_ref (n, 4) feedforward u_r — dashed, same colors.
     """
     t_u = np.arange(U.shape[0]) * Ts
 
@@ -209,6 +239,9 @@ def plot_inputs(U:            np.ndarray,
     for i in range(NU):
         ax.step(t_u, U[:, i], where='post', color=colors[i],
                 linewidth=1.2, label=input_labels[i])
+        if U_ref is not None:
+            ax.step(t_u, U_ref[:, i], where='post', color=colors[i],
+                    linestyle='--', linewidth=0.9, alpha=0.8)
     ax.axhline(f_hover, color='k', linestyle='--', linewidth=1, alpha=0.5, label='f_hover')
     _mark_switch(ax, t_switch, switch_label)
     ax.set_ylabel('thrust [N]')
@@ -220,6 +253,9 @@ def plot_inputs(U:            np.ndarray,
     ax = axes[1]
     T_total = U.sum(axis=1)
     ax.step(t_u, T_total, where='post', color='purple', linewidth=1.2, label='T_total')
+    if U_ref is not None:
+        ax.step(t_u, U_ref.sum(axis=1), where='post', color='purple',
+                linestyle='--', linewidth=0.9, alpha=0.8, label='T_ref (u_r)')
     ax.axhline(4 * f_hover, color='k', linestyle='--', linewidth=1, alpha=0.5, label='mg')
     _mark_switch(ax, t_switch, switch_label)
     ax.set_ylabel('total thrust [N]')
@@ -240,12 +276,26 @@ def plot_inputs(U:            np.ndarray,
 def plot_3d_trajectory(X:         np.ndarray,
                        x_ref:     np.ndarray,
                        title:     str,
-                       save_path: str):
-    """Plot the 3D flight path of the quadrotor."""
+                       save_path: str,
+                       P_meas:    np.ndarray = None):
+    """
+    Plot the 3D flight path of the quadrotor.
+
+    x_ref: target set point (≥3,) — or, Stage 6, a reference path (m, ≥3),
+    drawn as a dashed curve with its end point as the target.
+    Optional (Stage 6): P_meas (n, 3) noisy position measurements (dark-yellow dots).
+    """
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
 
+    if P_meas is not None:
+        ax.scatter(P_meas[:, 0], P_meas[:, 1], P_meas[:, 2], s=2, c='darkgoldenrod',
+                   alpha=0.5, depthshade=False, label='measured p')
+
     ax.plot(X[:, 0], X[:, 1], X[:, 2], 'b-', linewidth=1.5, label='trajectory')
+    if np.ndim(x_ref) == 2:
+        ax.plot(x_ref[:, 0], x_ref[:, 1], x_ref[:, 2], 'r--', linewidth=1, label='reference')
+        x_ref = x_ref[-1]
     ax.scatter(*X[0, :3],  color='green', s=100, marker='o', label='start')
     ax.scatter(*x_ref[:3], color='red',   s=100, marker='*', label='target')
 
@@ -579,6 +629,54 @@ def plot_artificial_reference(X:         np.ndarray,
         ax.set_xlabel('t [s]')
         ax.grid(True, alpha=0.3)
     axes[0].legend(fontsize=7, loc='lower right')
+
+    plt.tight_layout()
+    _ensure_dir(save_path)
+    plt.savefig(save_path, dpi=150)
+    _show()
+    print(f'Plot saved: {save_path}')
+
+
+# ─────────────────────────────────────────────────────────────────
+# Tracking Error  (Stage 6 — time-varying reference)
+# ─────────────────────────────────────────────────────────────────
+def plot_tracking_error(X:         np.ndarray,
+                        X_r:       np.ndarray,
+                        Ts:        float,
+                        title:     str,
+                        save_path: str,
+                        t_marks:   list = None):
+    """
+    Position and attitude tracking error against a time-varying reference.
+
+    X    (n+1, ≥13)  closed-loop states;  X_r (n, 13) reference at the same
+                     instants (rows 0..n−1 are compared)
+    t_marks          optional [(t, label), ...] phase boundaries to mark
+
+    Left : ‖p − p_r‖ [m]                (log scale — shows the transient
+                                          and the residual level together)
+    Right: attitude error angle [°] = 2·arccos|⟨q, q_r⟩|  (double-cover safe)
+    """
+    n   = X_r.shape[0]
+    t   = np.arange(n) * Ts
+    e_p = np.linalg.norm(X[:n, :3] - X_r[:, :3], axis=1)
+    q   = X[:n, 6:10] / np.linalg.norm(X[:n, 6:10], axis=1, keepdims=True)
+    dot = np.abs(np.sum(q * X_r[:, 6:10], axis=1))
+    e_q = np.rad2deg(2.0 * np.arccos(np.clip(dot, 0.0, 1.0)))
+
+    fig, axes = plt.subplots(1, 2, figsize=(15, 4))
+    fig.suptitle(title, fontsize=14)
+    for ax, e, lab in ((axes[0], e_p, '‖p − p_r‖ [m]'),
+                       (axes[1], e_q, 'attitude error [°]')):
+        ax.plot(t, e, 'b', lw=1.2)
+        for t_m, label in (t_marks or []):
+            ax.axvline(t_m, color='k', ls=':', lw=1)
+            ax.text(t_m, 1.0, f' {label}', transform=ax.get_xaxis_transform(),
+                    fontsize=8, va='top')
+        ax.set_ylabel(lab)
+        ax.set_xlabel('t [s]')
+        ax.grid(True, which='both', alpha=0.3)
+    axes[0].set_yscale('log')
 
     plt.tight_layout()
     _ensure_dir(save_path)

@@ -50,7 +50,11 @@ The main branch holds **every stage**, all on the same shared files (`quadrotor_
 | `simulate_compare.py` | **Stage 4** — loads both `sim_data.npz` (no simulation) → `results/stage4_compare/ekf_vs_mhe.png` + metrics table. |
 | `ocp_config_tracking.py` | **Stage 5** — tracking MPC with artificial reference (Limon et al., IEEE TAC 2018): x̃ = [x; p_a] with ṗ_a = 0 (`create_tracking_model`), stage cost on x − x_a(p_a), offset cost ‖p_a − r‖²_T as terminal cost (r = parameter, never in a constraint), terminal equality x_N = x_a on `IDX_TERM_EQ` (qw left out, LICQ), room box `ROOM_LB/UB` (part of Z), Y_s = room shrunk by `MARGIN`. `optimal_reachable_reference` = y_r* (clip onto Y_s, diagonal T). |
 | `simulate_tracking.py` | **Stage 5** — entry point: piecewise-constant reference sequence incl. a target outside the room, nominal plant. Output `results/stage5_tracking/`. |
-| `plot_utils.py` | All figures: `plot_states`, `plot_inputs`, `plot_3d_trajectory`, `plot_terminal_constraint` (2a), `plot_disturbance`, `plot_velocity_estimation`, `plot_solve_times`, `plot_estimator_comparison`, `plot_artificial_reference` (5). Each ensures its save-path directory exists. |
+| `reference_generate.py` | **Stage 6** — `HelixReference(HelixParams())`: analytic helix (take-off hop → spiral-out ramp → constant-rate climb), p, v, a, jerk, snap + yaw; order-4 smoothstep keeps everything continuous up to snap. `sample(t)`, `horizon(t0, N, dt)`, `self_test`, `--plot` → `results/stage6_trajectory/helix_reference.png`. |
+| `reference_flatness.py` | **Stage 6** — differential-flatness map `flat_to_state_input(RefSample, d_hat=None)` → (x_r, u_r) consistent with `f(x, u, d̂)` (ZYX yaw, inverse `MIXER`); `horizon_xu`. Self-test flies u_r open loop through the model. |
+| `ocp_config_trajectory.py` | **Stage 6** — trajectory-tracking NMPC: `state_error(x, x_r)` = [p − p_r, v − v_r, vec(q ⊗ q_r⁻¹) via `quat_error_casadi`, ω − ω_r], cost y = [e; u − u_r] with yref = 0, references per node as parameter `p = [d̂; x_r; u_r]` (`NP = 23`, `pack_param`), terminal cost = hover DARE `P_lqr` on the 12 error coordinates, optional soft \|ω\| box. Helpers `set_trajectory`, `set_initial_state`, `init_guess`, `shift_warm_start`. |
+| `simulate_trajectory.py` | **Stage 6** — entry point: helix with noisy y = [p; q; ω] + certified MHE (Stage 4b estimator), no disturbance (`D_TRUE = 0`: the certified MHE needs ≈ 2 s to learn a constant d from its prior d = 0), certified MHE from `state_est_mhe`, needs `data/mhe_params.npz`; d̂ also enters the flatness map. `--nominal` = verification run: no disturbance, full state feedback. Output `results/stage6_trajectory/` (`nominal/`). |
+| `plot_utils.py` | All figures: `plot_states`, `plot_inputs`, `plot_3d_trajectory`, `plot_terminal_constraint` (2a), `plot_disturbance`, `plot_velocity_estimation`, `plot_solve_times`, `plot_estimator_comparison`, `plot_artificial_reference` (5), `plot_tracking_error` (6). Stage 6: `plot_states` / `plot_3d_trajectory` also take a time-varying `x_ref` (m, 13), `plot_inputs(..., U_ref=)`, noisy measurements via `plot_states(..., Y=)` and `plot_3d_trajectory(..., P_meas=)`. Each ensures its save-path directory exists. |
 
 ## Model conventions
 
@@ -74,7 +78,7 @@ The main branch holds **every stage**, all on the same shared files (`quadrotor_
    - **4a:** augmented EKF.
    - **4b:** augmented Lyapunov MHE with δ-IOSS certificate (λ → LMI → T_min → N).
 6. **Stage 5:** tracking MPC with artificial reference (piecewise-constant references, room walls as state constraints).
-7. **Stage 6:** time-varying reference trajectory tracking.
+7. **Stage 6:** time-varying reference trajectory tracking (helix, flatness feedforward; main run with noisy measurements + the MHE, `--nominal` verification run).
 8. **Stage 7:** obstacle avoidance.
 9. **Stage 8:** robust MPC.
 10. **Stage 9:** stochastic MPC.
@@ -82,5 +86,5 @@ The main branch holds **every stage**, all on the same shared files (`quadrotor_
 ## Conventions
 
 - Keep the existing house style: box-drawing section headers, aligned assignments, docstrings that explain the *why*.
-- File headers: `name.py — <Stage> Title` with `<Stage>` = `All Stages`, `Stage 1`, `Stage 2a` (QIH), `Stage 2b` (DARE), `Stage 3`, `Stage 3–4`, `Stage 4`, `Stage 4a` (EKF), `Stage 4b` (MHE) or `Stage 5` (tracking), no colon after it, a `===` underline of the same length, then what/why.
+- File headers: `name.py — <Stage> Title` with `<Stage>` = `All Stages`, `Stage 1`, `Stage 2a` (QIH), `Stage 2b` (DARE), `Stage 3`, `Stage 3–4`, `Stage 4`, `Stage 4a` (EKF), `Stage 4b` (MHE), `Stage 5` (tracking) or `Stage 6` (trajectory), no colon after it, a `===` underline of the same length, then what/why.
 - Don't commit `c_generated_code*/`, `*.json` (gitignored). `results/<stage>/` figures are tracked on purpose (README).

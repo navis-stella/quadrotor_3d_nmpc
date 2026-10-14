@@ -236,7 +236,7 @@ cost ($T = 50$) and no attitude or rate limits produces.
   admissible in this stage because no attitude or rate constraint is active. For smoother flights
   lower `T_OFFSET` (slower $p_a^\ast$) or add tilt / rate bounds.
 - **Nominal only.** There is no disturbance and no estimator. $g$ assumes $d = 0$, so
-  $u_a = f_{\text{hover}} \mathbf 1$.
+  $u_a = f_{\text{hover}}$.
 - **Position reference only.** Yaw is fixed to 0. Extending $y_a$ to $[p_a; \psi_a]$ is a change of
   $g$ and of the terminal equality.
 - **RTI instead of full convergence.** See the scope note in §2.
