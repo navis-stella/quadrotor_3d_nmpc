@@ -65,7 +65,7 @@ J = 2\,\lambda^{T}\, \bigl\|\hat z(t - T) - \bar z\bigr\|_P^2
 subject to the model. The estimate is the end point $\hat z(t)$. Three features distinguish it
 from a hand-tuned MHE:
 
-1. **The weights are the certificate.** $P$, $Q$, $R$ and $\lambda$ are those of §2.1, not tuning parameters.
+1. **The weights are the certificate.** $P$, $Q$, $R$ and $\lambda$ are those of [§2.1](#21-detectability-as-an-incremental-lyapunov-function), not tuning parameters.
 2. **Filtering prior.** $\bar z$ is the estimate the MHE *delivered* for time $t - T$, not a
    smoothed value from the previous window.
 3. **Discounting.** Older data is weighted down by $\lambda^{t-\tau}$; the prior by $\lambda^T$.
@@ -173,7 +173,7 @@ $T_s = 0.05$ s. The minimum allowed is $N_{\min} = 41$ (strict $T > 2$ s). The g
 $\rho = 4^{1/3} \cdot 0.5 = 0.794$ per second. The MHE window is independent of the 1 s MPC horizon.
 
 **Cost on the grid.** Every stage $i$ carries its age $\tau_i = (N - i) T_s$ and uses one expression,
-the integrand of §2.2:
+the integrand of [§2.2](#22-mhe-cost-and-stability-result):
 
 ```math
 \ell_i = a_i \frac{2\,\lambda^{\tau_i}}{T_s} \|e_z\|_P^2 + 2\,\lambda^{\tau_i} \|w_i\|_Q^2 + m_i\, \lambda^{\tau_i} \|e_{y,i}\|_R^2 .
@@ -324,7 +324,7 @@ also not tested yet.
 - **Quaternion metric.** The certificate bounds $`\|z - \tilde z\|_P^2`$ with a Euclidean difference in
   $q$; the MHE cost uses the multiplicative error $\lvert q \otimes q_r^{-1}\rvert - [1,0,0,0]$. For small
   errors the two agree up to a factor, but the cost is not literally the certified function.
-- **Exact optimizer vs. RTI.** The stability result of §2.2 applies to the optimal MHE solution; `SQP_RTI` performs
+- **Exact optimizer vs. RTI.** The stability result of [§2.2](#22-mhe-cost-and-stability-result) applies to the optimal MHE solution; `SQP_RTI` performs
   one iteration per sample. All solves succeeded, but optimality is not checked.
 - **Continuous-time certificate, discrete implementation.** The cost integral is a left Riemann
   sum on the $T_s$ grid and the model an RK4 step. Both approximations shrink with $T_s$; the
@@ -341,7 +341,7 @@ also not tested yet.
 - **The Lyapunov MHE turns tuning into a certificate.** One design input, the decay
   $\lambda = 0.5$ per second, fixes the weights through an LMI and the horizon through
   $T > \ln 4 / \kappa = 2$ s. The resulting estimator is robustly stable by construction on the
-  certified envelope, with the caveats of §8.
+  certified envelope, with the caveats of [§8](#8-limitations-and-open-points).
 - **It is the more accurate estimator on this scenario.** Once converged it estimates velocity
   about $5\times$ and the disturbance about $20\times$ better than the EKF, which shows up as calmer
   attitude and thrust and a smaller position error.

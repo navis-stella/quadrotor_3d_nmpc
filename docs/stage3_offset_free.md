@@ -220,7 +220,7 @@ flowchart TD
 | Terminal cost | $W_e = P_{\text{lqr}}$, reduced-order DARE |
 | Parameters | `model.p` $= d \in \mathbb{R}^6$, default $0$ |
 | Horizon, solver | $N = 20$, $T = 1$ s, $T_s = 0.05$ s, `SQP_RTI`, ERK4, Gauss-Newton, HPIPM |
-| EKF | RK4 prediction, $F_d = I + F_c T_s$, Joseph update, tuning as in §2.2 |
+| EKF | RK4 prediction, $F_d = I + F_c T_s$, Joseph update, tuning as in [§2.2](#22-augmented-ekf) |
 | Target calculator | closed form, motor clipping with warning |
 | Activation | $T_{\text{activate}} = 4$ s |
 
@@ -246,7 +246,7 @@ offset, while the EKF already estimates $\hat d$ in the background. At $t = 4$ s
 control is switched on. Because the disturbance is present from the start, the demonstration
 isolates the *correction mechanism*; detection delay after a disturbance onset is not tested.
 
-**Expected equilibrium** (§2.3 evaluated for this disturbance, $m = 1$ kg, $\psi = 0$):
+**Expected equilibrium** ([§2.3](#23-steady-state-target-calculator) evaluated for this disturbance, $m = 1$ kg, $\psi = 0$):
 
 | Quantity | Value |
 |---|---|
@@ -289,8 +289,8 @@ steady state that is not the reference:
 
 Each offset points in the direction the disturbance pushes: downwind in $x$ and $y$, and
 downward under the extra weight. Roll and pitch already sit at about $-1.3°$ and $-2.2°$,
-which is the equilibrium tilt of §4, while the reference still asks for $0°$. This is exactly
-the structure predicted in §1: physics forces the correct attitude, and the position error is
+which is the equilibrium tilt of [§4](#4-scenario), while the reference still asks for $0°$. This is exactly
+the structure predicted in [§1](#1-motivation): physics forces the correct attitude, and the position error is
 what the nominal controller needs to keep commanding it.
 
 **Phase 2, offset-free ON ($t \ge 4$ s).** The attitude reference (green dashed, `eq. target`)
@@ -307,7 +307,7 @@ equilibrium target.
 In phase 1 total thrust settles at about $12.8$ N, already close to $T_s$: the plant needs
 that thrust to hover regardless of the reference. At activation, thrust briefly rises to
 about $15.7$ N to lift the drone the missing $7.9$ cm, dips slightly, and settles at
-$12.77$ N with all four motors at $3.19$ N, matching the analytical $T_s$ and $u_s$ of §4.
+$12.77$ N with all four motors at $3.19$ N, matching the analytical $T_s$ and $u_s$ of [§4](#4-scenario).
 The motors stay equal because no torque disturbance is present.
 
 ### 5.4 Flight path

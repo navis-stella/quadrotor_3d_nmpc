@@ -30,7 +30,7 @@ terminal treatment changes.
 
 ### 2.1 Stage 2a — Quasi-Infinite Horizon NMPC
 
-The zero-terminal constraint of Stage 1 §2.1 is replaced by three ingredients:
+The zero-terminal constraint of Stage 1 [§2.1](stage1_basic_nmpc.md#21-starting-point-zero-terminal-constraint-mpc) is replaced by three ingredients:
 
 1. a **terminal region** $`\bar{x}(t+T;\,t) \in \Omega_\alpha = \{x : x^\top P x \le \alpha\}`$,
 2. a **terminal cost** $F(x) = x^\top P x$,

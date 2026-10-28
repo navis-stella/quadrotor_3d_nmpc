@@ -95,20 +95,21 @@ def state_error(x, x_r):
 # ─────────────────────────────────────────────────────────────────
 # Solver Creator
 # ─────────────────────────────────────────────────────────────────
-def create_solver(N:         int   = 20,
-                  T_horizon: float = 1.0,
-                  omega_max: float = None) -> AcadosOcpSolver:
+def create_ocp(N:         int   = 20,
+               T_horizon: float = 1.0,
+               omega_max: float = None) -> AcadosOcp:
     """
-    Build the trajectory-tracking NMPC solver.
+    The trajectory-tracking OCP, not yet compiled.
+
+    Split from create_solver so that a later stage can add constraints to
+    exactly this problem (Stage 7: obstacle constraints, ocp_config_obstacle)
+    instead of copying it.
 
     Args:
         N, T_horizon  horizon steps and duration [s]; Ts = T_horizon / N
                       must equal the sample time of the reference grid
         omega_max     optional soft |ωᵢ| bound [rad/s] (add_soft_omega_box);
                       None = no rate limit
-
-    Returns:
-        AcadosOcpSolver — feed it with set_trajectory + set_initial_state
     """
     model = create_disturbance_model()
     model.name = 'quadrotor_3d_trajectory'
@@ -160,6 +161,19 @@ def create_solver(N:         int   = 20,
     ocp.solver_options.print_level     = 0
 
     ocp.code_export_directory = 'c_generated_code_trajectory'
+    return ocp
+
+
+def create_solver(N:         int   = 20,
+                  T_horizon: float = 1.0,
+                  omega_max: float = None) -> AcadosOcpSolver:
+    """
+    Build the trajectory-tracking NMPC solver (create_ocp, compiled).
+
+    Returns:
+        AcadosOcpSolver — feed it with set_trajectory + set_initial_state
+    """
+    ocp = create_ocp(N, T_horizon, omega_max)
     return AcadosOcpSolver(ocp, json_file='acados_ocp_trajectory.json',
                            verbose=False)
 

@@ -86,7 +86,7 @@ state $g(y_r^\ast)$ — the optimal reachable one — and not merely to *some* s
 
 > **Scope of this implementation.** The guarantees assume the OCP is solved to optimality.
 > Closed-loop runs use a single `SQP_RTI` iteration per step, and the theory is not re-verified
-> for every assumption (e.g. the chosen terminal equality, see §3). The statements in §5 are
+> for every assumption (e.g. the chosen terminal equality, see [§3](#3-implementation)). The statements in [§5](#5-results) are
 > therefore *observed* behaviour of this implementation. `create_solver(nlp_solver='SQP')`
 > iterates to convergence if the exact-solution behaviour is needed as a reference.
 
@@ -239,7 +239,7 @@ cost ($T = 50$) and no attitude or rate limits produces.
   $u_a = f_{\text{hover}}$.
 - **Position reference only.** Yaw is fixed to 0. Extending $y_a$ to $[p_a; \psi_a]$ is a change of
   $g$ and of the terminal equality.
-- **RTI instead of full convergence.** See the scope note in §2.
+- **RTI instead of full convergence.** See the scope note in [§2](#2-theory-tracking-with-an-artificial-reference).
 - **Non-smooth $p_a^\ast$.** Small kinks in $p_a^\ast$ appear while the motors saturate (e.g. $z$ at
   $t \approx 0.3$ s). A likely cause is the single SQP iteration per step, but this was not isolated.
 

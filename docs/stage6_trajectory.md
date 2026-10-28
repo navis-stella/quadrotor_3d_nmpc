@@ -68,7 +68,7 @@ $k\omega \approx 0.27$ m/s. The hop, the radius $r(t)$ and the phase rate $\dot\
 the degree-9 smoothstep $s(\tau) = 126\tau^5 - 420\tau^6 + 540\tau^7 - 315\tau^8 + 70\tau^9$,
 whose first four derivatives vanish at both ends. Position, velocity, acceleration, jerk and
 snap are therefore **continuous at every phase boundary** — the flatness map needs snap for the
-motor thrusts (§3), and a jump in snap would be a jump in $u_r$.
+motor thrusts ([§3](#3-differential-flatness-reference_flatnesspy)), and a jump in snap would be a jump in $u_r$.
 
 <p align="center">
   <img src="../results/stage6_trajectory/helix_reference.png" alt="helix reference" width="80%">
@@ -342,8 +342,8 @@ WSL and not reproducible; the typical calls stay far within the budget.
   dependent terminal ingredients (Köhler et al., 2020) would provide one.
 - **RTI instead of full convergence.** One SQP iteration per sample, as in Stages 1–5.
 - **No disturbance in the main run.** The $\hat d$ path is implemented and verified open loop
-  (§3), but the closed loop runs without disturbance, because the certified MHE learns a constant
-  disturbance only slowly (§5). Reworking the estimator start-up belongs to Stage 4.
+  ([§3](#3-differential-flatness-reference_flatnesspy)), but the closed loop runs without disturbance, because the certified MHE learns a constant
+  disturbance only slowly ([§5](#5-closed-loop-and-scenario)). Reworking the estimator start-up belongs to Stage 4.
 - **Constant yaw.** `reference_generate.py` returns $\dot\psi = \ddot\psi = 0$; the flatness map and
   the OCP already handle a yaw-varying reference.
 - **No state constraints** besides the soft rate bound — no room walls as in Stage 5.

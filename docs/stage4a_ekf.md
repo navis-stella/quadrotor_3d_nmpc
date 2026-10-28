@@ -125,7 +125,7 @@ $R$ is matched to the sensor.
 | force disturbance | $0.2$ N²/s | $10^{-2}$ | $1.0$ | sets the $\hat d_f$ bandwidth (≈ 1 s transient) |
 | torque disturbance | $2 \cdot 10^{-3}$ N²m²/s | $10^{-4}$ | $0.1$ | well observable through $\omega$ |
 
-$`R = \mathrm{diag}(\sigma_p^2 I_3,\; \sigma_q^2 I_4,\; \sigma_\omega^2 I_3)`$ with the sensor values of §3.1.
+$`R = \mathrm{diag}(\sigma_p^2 I_3,\; \sigma_q^2 I_4,\; \sigma_\omega^2 I_3)`$ with the sensor values of [§3.1](#31-sensor-simulator).
 The force-disturbance density $Q_{c,f}$ is the main knob: larger values track a disturbance step
 faster but pass more measurement noise into $\hat d_f$, and through the MPC into the thrusts.
 

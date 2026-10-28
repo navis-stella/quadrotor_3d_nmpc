@@ -4,7 +4,7 @@ Nonlinear model predictive control for a 3D quadrotor in Python, using the
 [acados](https://docs.acados.org/) solver and the [CasADi](https://web.casadi.org/) symbolic
 framework. The project works through MPC theory stage by stage, from terminal ingredients and
 stability to offset-free control, state estimation, tracking of piece-wise constant
-references and of time-varying trajectories. Every stage runs on the same quadrotor
+references and of time-varying trajectories, and obstacle avoidance. Every stage runs on the same quadrotor
 model and changes one ingredient at a time, so the effect of each method can be compared
 directly.
 
@@ -38,9 +38,10 @@ Equations of motion, disturbance model and quaternion conventions →
 | `stage4` | 4b | **Lyapunov MHE** — weights and horizon from an LMI detectability certificate; comparison with the EKF | [stage4b_mhe.md](docs/stage4b_mhe.md) |
 | `stage5` | 5 | **Tracking NMPC with artificial reference** — piece-wise constant references, recursively feasible for any reference, converges to the closest admissible steady state (nominal plant, full state feedback) | [stage5_tracking.md](docs/stage5_tracking.md) |
 | `stage6` | 6 | **Trajectory-tracking NMPC** — helix reference, flatness feedforward $(x_r, u_r)$, time-indexed reference over the horizon, quaternion-error cost; noisy $`y = [p;\, q;\, \omega]`$ with the Stage 4b MHE | [stage6_trajectory.md](docs/stage6_trajectory.md) |
-| *upcoming* | 7 | Stochastic MPC | |
+| `stage7` | 7a | **Obstacle avoidance with state constraints** — vertical pillars on the Stage 6 helix as soft squared-distance constraints $h_j(p) \ge 0$ (exact penalty), warm start projected onto the free space (nominal plant, full state feedback) | [stage7a_obst_dist.md](docs/stage7a_obst_dist.md) |
+| `stage7` | 7b | **Discrete-time control barrier function** — same scene, constraint $`h_j(x_{i+1}) \ge (1-\gamma)\, h_j(x_i)`$ with the next state as an RK4 step inside the constraint; $\gamma$ sweep | [stage7b_obst_dcbf.md](docs/stage7b_obst_dcbf.md) |
 | *upcoming* | 8 | Robust MPC | |
-| *upcoming* | 9 | Obstacle avoidance with state constraints | |
+| *upcoming* | 9 | Stochastic MPC | |
 
 ## Key results
 
@@ -54,6 +55,8 @@ Equations of motion, disturbance model and quaternion conventions →
 | 4b | The certified MHE ($T = 3$ s $> T_{\min} = 2$ s) estimates velocity $5\times$ and the disturbance $18\times$ more accurately than the EKF, at 14 ms per step (budget 50 ms). |
 | 5 | A reference sequence with 6 m jumps, the last one outside the room ($x = 12$ m), is flown on the nominal plant. The artificial reference $p_a^\ast$ runs ahead of the quadrotor and stops at the boundary of the steady-state set; the position settles at the closest admissible point $y_r^\ast = (8, 6, 2)$ m. The flight is aggressive (tilt up to ≈ 65°, body rates up to ≈ 6.6 rad/s, motors saturated at the jumps). |
 | 6 | A 22.9 s climbing helix (2 m/s, tilt up to 17.5°) is flown with only noisy $`[p;\, q;\, \omega]`$ measured and the certified MHE in the loop: 10 mm RMS position error and 0.65° attitude error, 0 failed solves, MPC ≈ 3 ms per call. With full state feedback the same controller tracks to below 0.2 mm. |
+| 7a | Three pillars stand on the helix, crossed 9 times in 3 turns. The quadrotor leaves the reference about one horizon (1 s) before each pillar, passes it on the near side 0.35 m off the reference and keeps exactly the 5 cm margin (47.6 mm between samples); 0 failed solves, slack at solver tolerance, MPC ≈ 5 ms per call. |
+| 7b | The DCBF with $\gamma = 0.2$ starts the avoidance 0.25 s earlier and keeps 85–111 mm instead of 50 mm from the pillars, with smaller step changes of the body rates. The $\gamma$ sweep shows the trade-off: a smaller $\gamma$ avoids earlier and farther, but below $\gamma \approx 0.2$ it binds for all pillars at once, the rate bound is hit in up to 36 % of the samples and the tilt reaches 40°. |
 
 ## File structure
 
@@ -102,6 +105,12 @@ quadrotor_3d_nmpc/
 │                               #             quaternion state error, shifted warm start
 ├── simulate_trajectory.py      # Stage 6   — entry point (MHE run; --nominal verification)
 │
+├── ocp_config_obstacle.py      # Stage 7   — Stage 6 OCP + soft pillar constraints: distance form
+│                               #             h_j(p) ≥ 0 (7a) or DCBF (7b), projected warm start
+├── obstacle_sim_config.py      # Stage 7   — shared scene + closed loop (helix through three pillars)
+├── simulate_obst_dist.py       # Stage 7a  — entry point: distance constraint
+├── simulate_obst_dcbf.py       # Stage 7b  — entry point: DCBF (--sweep over γ)
+│
 ├── run.sh                      # WSL bridge launcher (Windows Git Bash → WSL2)
 ├── CLAUDE.md                   # Project guide for Claude Code
 ├── docs/
@@ -112,7 +121,9 @@ quadrotor_3d_nmpc/
 │   ├── stage4a_ekf.md
 │   ├── stage4b_mhe.md
 │   ├── stage5_tracking.md
-│   └── stage6_trajectory.md
+│   ├── stage6_trajectory.md
+│   ├── stage7a_obst_dist.md
+│   └── stage7b_obst_dcbf.md
 ├── results/                    # Figures per stage (tracked)
 │   ├── stage1_basic/
 │   ├── stage2a_qih/
@@ -122,14 +133,16 @@ quadrotor_3d_nmpc/
 │   ├── stage4b_mhe/             # figures + sim_data.npz
 │   ├── stage4_compare/
 │   ├── stage5_tracking/
-│   └── stage6_trajectory/       # MHE run; nominal/ = verification run
+│   ├── stage6_trajectory/       # MHE run; nominal/ = verification run
+│   ├── stage7a_obst_dist/
+│   └── stage7b_obst_dcbf/
 └── c_generated_code/           # acados generated code (gitignored)
 ```
 
 The `main` branch holds every stage, all running on the same shared files
 (`quadrotor_3d_model.py`, `plot_utils.py`, and from Stage 2b on `ocp_config_offsetfree.py`).
 Shared files only grow backward-compatibly: new stages add functions or optional keyword
-arguments, so earlier stages keep running unchanged. The tags `stage1` … `stage6` are snapshots
+arguments, so earlier stages keep running unchanged. The tags `stage1` … `stage7` are snapshots
 of the code as it was when each stage was finished. OCP configuration is kept separate from the
 simulation loop, so methods can be swapped and compared side by side.
 
@@ -158,6 +171,8 @@ The project files live on the Windows drive; acados runs in WSL2. `run.sh` handl
 ./run.sh simulate_tracking.py         # Stage 5               → results/stage5_tracking/
 ./run.sh simulate_trajectory.py       # Stage 6 (MHE)         → results/stage6_trajectory/
 ./run.sh simulate_trajectory.py --nominal   # Stage 6 check   → results/stage6_trajectory/nominal/
+./run.sh simulate_obst_dist.py        # Stage 7a              → results/stage7a_obst_dist/
+./run.sh simulate_obst_dcbf.py [--sweep]    # Stage 7b        → results/stage7b_obst_dcbf/
 
 ./run.sh observability_check.py       # observability at hover
 ./run.sh detectability_check.py       # re-derive the MHE certificate (needs cvxpy + MOSEK)

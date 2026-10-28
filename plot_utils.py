@@ -12,6 +12,8 @@ titles and paths.
     plot_estimator_comparison                        EKF vs MHE     (Stage 4)
     plot_artificial_reference                        p, p_a*, r     (Stage 5)
     plot_tracking_error                              ‖p − p_r‖, ∠(q, q_r)  (Stage 6)
+    plot_obstacle_topview, plot_obstacle_clearance   pillars, gap   (Stage 7a)
+    plot_dcbf_sweep                                  DCBF γ sweep   (Stage 7b)
 
 All functions require explicit title and save_path — no stage-specific
 defaults here, so each simulation script controls its own labeling.
@@ -277,16 +279,26 @@ def plot_3d_trajectory(X:         np.ndarray,
                        x_ref:     np.ndarray,
                        title:     str,
                        save_path: str,
-                       P_meas:    np.ndarray = None):
+                       P_meas:    np.ndarray = None,
+                       cylinders: np.ndarray = None):
     """
     Plot the 3D flight path of the quadrotor.
 
     x_ref: target set point (≥3,) — or, Stage 6, a reference path (m, ≥3),
     drawn as a dashed curve with its end point as the target.
     Optional (Stage 6): P_meas (n, 3) noisy position measurements (dark-yellow dots).
+    Optional (Stage 7): cylinders (n_c, 3) rows [cx, cy, ρ] — vertical pillars,
+    drawn over the z-range of the flight.
     """
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
+
+    if cylinders is not None:
+        z_lo, z_hi = min(X[:, 2].min(), 0.0), X[:, 2].max() + 0.5
+        th, zz = np.meshgrid(np.linspace(0, 2 * np.pi, 40), [z_lo, z_hi])
+        for cx, cy, rho in np.atleast_2d(cylinders):
+            ax.plot_surface(cx + rho * np.cos(th), cy + rho * np.sin(th), zz,
+                            color='gray', alpha=0.35, linewidth=0)
 
     if P_meas is not None:
         ax.scatter(P_meas[:, 0], P_meas[:, 1], P_meas[:, 2], s=2, c='darkgoldenrod',
@@ -677,6 +689,155 @@ def plot_tracking_error(X:         np.ndarray,
         ax.set_xlabel('t [s]')
         ax.grid(True, which='both', alpha=0.3)
     axes[0].set_yscale('log')
+
+    plt.tight_layout()
+    _ensure_dir(save_path)
+    plt.savefig(save_path, dpi=150)
+    _show()
+    print(f'Plot saved: {save_path}')
+
+
+# ─────────────────────────────────────────────────────────────────
+# Obstacles  (Stage 7 — pillar avoidance)
+# ─────────────────────────────────────────────────────────────────
+def plot_obstacle_topview(X:         np.ndarray,
+                          X_r:       np.ndarray,
+                          pillars:   np.ndarray,
+                          r_drone:   float,
+                          margin:    float,
+                          title:     str,
+                          save_path: str,
+                          P_pred:    list = None):
+    """
+    Top view (x–y) of the flight around vertical pillars.
+
+    X       (n+1, ≥2)  closed-loop path;  X_r (n, ≥2) reference path
+    pillars (n_p, 3)   rows [cx, cy, ρ]
+    P_pred             optional [(t, (N+1, ≥2) predicted path), ...] — MPC
+                       predictions at a few instants (thin green, ● = node 0)
+
+    Per pillar: filled disk = the pillar (radius ρ); dashed = ρ + r_drone,
+    where the drone centre would touch it; dotted = ρ + r_drone + δ, the
+    circle the constraint keeps every predicted node out of.
+    """
+    fig, ax = plt.subplots(figsize=(8.5, 8))
+    ax.plot(X_r[:, 0], X_r[:, 1], 'r--', lw=1, label='reference')
+    ax.plot(X[:, 0],   X[:, 1],   'b-',  lw=1.3, label='trajectory')
+    for j, (t_p, P) in enumerate(P_pred or []):
+        ax.plot(P[:, 0], P[:, 1], 'g.-', lw=0.8, ms=3,
+                label='MPC prediction' if j == 0 else None)
+        ax.plot(P[0, 0], P[0, 1], 'go', ms=5)
+    th = np.linspace(0, 2 * np.pi, 200)
+    for j, (cx, cy, rho) in enumerate(np.atleast_2d(pillars)):
+        ax.fill(cx + rho * np.cos(th), cy + rho * np.sin(th), color='gray', alpha=0.5,
+                label='pillar' if j == 0 else None)
+        for r, ls, lab in ((rho + r_drone, '--', 'ρ + r_drone (contact)'),
+                           (rho + r_drone + margin, ':', 'ρ + r_drone + δ (constraint)')):
+            ax.plot(cx + r * np.cos(th), cy + r * np.sin(th), 'k', ls=ls, lw=0.8,
+                    label=lab if j == 0 else None)
+        ax.text(cx, cy, f'P{j + 1}', ha='center', va='center', fontsize=9, color='white')
+    ax.plot(*X[0, :2], 'go', ms=8, label='start')
+    ax.set_aspect('equal')
+    ax.set_xlabel('x [m]')
+    ax.set_ylabel('y [m]')
+    ax.set_title(title)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8, loc='upper right')
+
+    plt.tight_layout()
+    _ensure_dir(save_path)
+    plt.savefig(save_path, dpi=150)
+    _show()
+    print(f'Plot saved: {save_path}')
+
+
+def plot_obstacle_clearance(C:         np.ndarray,
+                            C_between: np.ndarray,
+                            slack:     np.ndarray,
+                            Ts:        float,
+                            margin:    float,
+                            title:     str,
+                            save_path: str):
+    """
+    Gap between drone ball and pillar surfaces over time.
+
+    C          (n+1, n_p)  gap at the samples  ‖p_xy − c‖ − ρ − r_drone  [m]
+    C_between  (n, n_p)    smallest gap on the segment p_k → p_{k+1}
+    slack      (n,)        largest pillar slack of each MPC solve [m²]
+
+    Left : min over pillars of the gap (one curve per pillar, clipped to the
+           region near contact); 0 = touching, δ = the constraint level.
+    Right: the slack — 0 means the soft constraint acted as the hard one.
+    """
+    t_x = np.arange(C.shape[0]) * Ts
+    t_s = np.arange(C_between.shape[0]) * Ts
+    fig, axes = plt.subplots(1, 2, figsize=(15, 4), gridspec_kw={'width_ratios': [2, 1]})
+    fig.suptitle(title, fontsize=14)
+
+    ax = axes[0]
+    for j in range(C.shape[1]):
+        line, = ax.plot(t_x, C[:, j], lw=1.2, label=f'P{j + 1}')
+        ax.plot(t_s, C_between[:, j], ':', lw=0.8, color=line.get_color())
+    ax.axhline(0.0,    color='r', lw=1, label='contact')
+    ax.axhline(margin, color='k', lw=1, ls='--', label='δ (constraint)')
+    ax.set_ylim(-0.05, 1.0)
+    ax.set_xlabel('t [s]')
+    ax.set_ylabel('gap to pillar [m]')
+    ax.set_title('solid: at samples, dotted: between samples', fontsize=9)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8, loc='upper right', ncol=2)
+
+    ax = axes[1]
+    ax.plot(np.arange(len(slack)) * Ts, slack, 'm', lw=1.2)
+    ax.set_xlabel('t [s]')
+    ax.set_ylabel('max pillar slack [m²]')
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    _ensure_dir(save_path)
+    plt.savefig(save_path, dpi=150)
+    _show()
+    print(f'Plot saved: {save_path}')
+
+
+def plot_dcbf_sweep(curves:    list,
+                    t_window:  tuple,
+                    margin:    float,
+                    omega_max: float,
+                    title:     str,
+                    save_path: str):
+    """
+    Stage 7b: closed-loop runs for several DCBF decay rates γ, side by side.
+
+    curves  [(label, t (n,), gap (n,), e_p (n,), w (n,)), ...] — gap = min over
+            pillars of the gap to the pillar surface [m], e_p = ‖p − p_r‖ [m],
+            w = max |ωᵢ| [rad/s]
+    t_window  (t0, t1) time range shown
+
+    Left : gap — a small γ bends away earlier and approaches δ gently
+    Middle: ‖p − p_r‖ — when the avoidance starts and what it costs
+    Right: max |ωᵢ| against the soft rate bound — how hard the swerve is
+    """
+    fig, axes = plt.subplots(1, 3, figsize=(17, 4.5))
+    fig.suptitle(title, fontsize=14)
+    cmap = plt.get_cmap('viridis')
+    for c, (label, t, gap, e_p, w) in enumerate(curves):
+        m   = (t >= t_window[0]) & (t <= t_window[1])
+        col = cmap(c / max(len(curves) - 1, 1))
+        axes[0].plot(t[m], gap[m], color=col, lw=1.3, label=label)
+        axes[1].plot(t[m], e_p[m], color=col, lw=1.3, label=label)
+        axes[2].plot(t[m], w[m],   color=col, lw=1.3, label=label)
+    axes[0].axhline(margin, color='k', ls='--', lw=1, label='δ (constraint)')
+    axes[0].axhline(0.0, color='r', lw=1, label='contact')
+    axes[0].set_ylim(-0.05, 1.5)
+    axes[0].set_ylabel('gap to nearest pillar [m]')
+    axes[1].set_ylabel('‖p − p_r‖ [m]')
+    axes[2].axhline(omega_max, color='k', ls='--', lw=1, label='soft rate bound')
+    axes[2].set_ylabel('max |ωᵢ| [rad/s]')
+    for ax in axes:
+        ax.set_xlabel('t [s]')
+        ax.grid(True, alpha=0.3)
+    axes[0].legend(fontsize=8, loc='upper right')
 
     plt.tight_layout()
     _ensure_dir(save_path)
