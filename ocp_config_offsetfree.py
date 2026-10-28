@@ -102,7 +102,7 @@ def add_soft_omega_box(ocp: AcadosOcp, omega_max: float,
     """
     |p|, |q|, |r| ≤ omega_max on nodes 1..N (node 0 is fixed by x0).
 
-    Why: the MHE's δ-IOSS certificate only holds on |ωᵢ| ≤ ω_max
+    Why: the MHE's i-iIOSS certificate only holds on |ωᵢ| ≤ ω_max
     (detectability_check.py). Without this box the MPC commands up to
     ~5.6 rad/s in the take-off transient — the true state leaves the
     certified set and the guarantee is void.
