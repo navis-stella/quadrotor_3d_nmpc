@@ -112,7 +112,6 @@ quadrotor_3d_nmpc/
 ├── simulate_obst_dcbf.py       # Stage 7b  — entry point: DCBF (--sweep over γ)
 │
 ├── run.sh                      # WSL bridge launcher (Windows Git Bash → WSL2)
-├── CLAUDE.md                   # Project guide for Claude Code
 ├── docs/
 │   ├── quadrotor_model.md
 │   ├── stage1_basic_nmpc.md
